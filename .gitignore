@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+*.log
+.DS_Store
+.vscode
+.idea
+
+# Frontend build cache
+.vite
+.tsbuildinfo
+*.tsbuildinfo
+
+# Local config (never commit secrets)
+config.yml

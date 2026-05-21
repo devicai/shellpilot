@@ -1,0 +1,73 @@
+# =============================================================================
+# ShellPilot — Example configuration
+# =============================================================================
+# Copy to config.yml and adjust to your environment.
+# Use ${ENV_VAR} or ${ENV_VAR:-default} to reference environment variables.
+
+server:
+  port: 3100
+  basePath: /api/v1
+  cors:
+    enabled: true
+    origins:
+      - http://localhost:5173
+      - http://localhost:3000
+
+database:
+  provider: mongodb
+  uri: ${DATABASE_URI:-mongodb://localhost:27017/shellpilot}
+
+redis:
+  host: ${REDIS_HOST:-localhost}
+  port: ${REDIS_PORT:-6379}
+  password: ${REDIS_PASSWORD:-}
+  db: 0
+
+auth:
+  jwt:
+    secret: ${JWT_SECRET:-change-me-in-production}
+    expiresIn: 8h
+  bootstrap:
+    adminEmail: ${BOOTSTRAP_ADMIN_EMAIL:-admin@shellpilot.local}
+    adminPassword: ${BOOTSTRAP_ADMIN_PASSWORD:-changeme}
+  apiKeyPrefix: shp_
+
+# AES-256-GCM master key for credential storage.
+# Generate with: openssl rand -base64 32
+secrets:
+  masterKey: ${SECRETS_MASTER_KEY}
+
+# JIT token TTL (seconds). Tokens are issued by /credentials/issue and consumed
+# (read once) via /credentials/verify.
+jit:
+  ttlSeconds: 60
+
+# --- Entity extensions ---
+# Activate to enable multi-tenancy. Leave empty for standalone mode.
+#
+# Example: scope all entities by clientUID via x-client-uid header.
+#
+# extensions:
+#   properties:
+#     - name: clientUID
+#       type: string
+#       required: true
+#       index: true
+#       entities: "*"
+#       source: header
+#       headerName: x-client-uid
+extensions:
+  properties: []
+
+logging:
+  level: info
+  format: json
+
+shellpilot:
+  # Fallback enforcement when no policy is active.
+  defaultEnforcement: warn
+  # Glob patterns matched against args; matched values are replaced with *** in traces.
+  redactPatterns:
+    - "--token=*"
+    - "--password=*"
+    - "--api-key=*"
