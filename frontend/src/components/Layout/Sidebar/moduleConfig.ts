@@ -3,9 +3,7 @@ import {
   faShield,
   faGaugeHigh,
   faUsers,
-  faKey,
   faTerminal,
-  faScaleBalanced,
   faVault,
   faClockRotateLeft,
   faGear,
@@ -26,6 +24,10 @@ export interface ModuleConfig {
   sections: ModuleSubSection[];
 }
 
+// Rules and API Keys intentionally absent from the sidebar:
+//   - Rules now live inside each CLI detail page (rules are always bound to a
+//     CLI, so editing them separately was extra navigation for no benefit).
+//   - API Keys collapsed to a single key per instance, managed from Settings.
 export const MODULE_CONFIG: ModuleConfig = {
   name: 'ShellPilot',
   icon: faShield,
@@ -33,9 +35,7 @@ export const MODULE_CONFIG: ModuleConfig = {
   sections: [
     { key: 'dashboard', label: 'Dashboard', icon: faGaugeHigh, path: '/dashboard' },
     { key: 'users', label: 'Users', icon: faUsers, path: '/users' },
-    { key: 'api-keys', label: 'API Keys', icon: faKey, path: '/api-keys' },
     { key: 'clis', label: 'CLIs Catalog', icon: faTerminal, path: '/clis' },
-    { key: 'rules', label: 'Rules', icon: faScaleBalanced, path: '/rules' },
     { key: 'credentials', label: 'Credentials', icon: faVault, path: '/credentials' },
     { key: 'traces', label: 'Traces', icon: faClockRotateLeft, path: '/traces' },
     { key: 'settings', label: 'Settings', icon: faGear, path: '/settings' },

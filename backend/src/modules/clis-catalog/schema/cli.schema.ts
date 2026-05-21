@@ -47,6 +47,9 @@ export class Cli {
   @Prop({ trim: true })
   icon?: string;
 
+  @Prop({ trim: true })
+  iconUrl?: string;
+
   @Prop({ default: true })
   active!: boolean;
 }

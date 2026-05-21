@@ -152,8 +152,21 @@ After enabling, every request must include `x-client-uid: <tenant>`. `BaseReposi
 - Webhooks (events stub is present; emission is not implemented).
 - Auto-detect installation by OS in the wrapper (catalog stores commands but the wrapper picks one).
 - Bridge to SuntropyAI for tenant sync.
-- Modifications to the Go wrapper (lives next door at `../devic-cli-wrapper/`, untouched for now).
 - Security audit — addressed in a later phase.
+
+## Follow-ups
+
+- **Profiles** — group of CLIs + credentials + rules tied to a use case
+  (`marketing`, `devops`, `qa`). A workstation auths with a profile and
+  receives only that profile's catalog and policy. Models multi-team rollouts
+  without exploding into one ShellPilot instance per team.
+- **CLI catalog import/export from a central repo** — load `clis/*.yml`
+  definitions from a shared registry (e.g. `devicai/cli-definitions`) so
+  metadata (install commands, env var hints, logo URLs) is curated once and
+  reused. Today every instance authors its own catalog.
+- **Trace JIT issuance** — emit an audit trace when `/credentials/issue` runs
+  (CLI, user, the triggering command path). Right now only `/verify` activity
+  shows up because `/issue` is upstream of the wrapper's exec step.
 
 ## License
 

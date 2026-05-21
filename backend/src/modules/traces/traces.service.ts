@@ -56,13 +56,29 @@ export class TracesService {
 
   async list(
     scope: ExtensionScope,
-    filter: { cli?: string; userId?: string; decision?: string; from?: string; to?: string },
+    filter: {
+      cli?: string;
+      userId?: string;
+      decision?: string;
+      from?: string;
+      to?: string;
+      excludeCli?: string[];
+    },
     opts: { limit?: number; offset?: number },
   ): Promise<PaginatedResponse<Trace>> {
     const q: FilterQuery<Trace> = {};
     if (filter.cli) q.cli = filter.cli.toLowerCase();
     if (filter.userId) q.userId = new Types.ObjectId(filter.userId);
     if (filter.decision) q.decision = filter.decision;
+    if (filter.excludeCli && filter.excludeCli.length > 0) {
+      // Mongo: combine explicit `cli` match (if any) with $nin so the caller
+      // can ask for "any CLI except devic-cli-wrapper" or "gh but not <list>".
+      if (typeof q.cli === 'string') {
+        q.cli = { $eq: q.cli, $nin: filter.excludeCli };
+      } else {
+        q.cli = { $nin: filter.excludeCli };
+      }
+    }
     if (filter.from || filter.to) {
       q.timestamp = {};
       if (filter.from) (q.timestamp as Record<string, Date>).$gte = new Date(filter.from);

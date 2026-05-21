@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Button, Modal, Form, Input, Select, Table, Tag, Space, Popconfirm, App as AntApp, Switch } from 'antd';
+import { Button, Modal, Form, Input, Select, Table, Tag, Space, Popconfirm, App as AntApp, Switch, Typography } from 'antd';
+import dayjs from 'dayjs';
 import { PageHeader } from '../../components/PageHeader';
 import { usersApi, type CreateUserPayload } from '../../api/endpoints/users';
 import type { User, UserRole } from '../../types/api';
+
+const { Text } = Typography;
 
 const ROLE_OPTS: { value: UserRole; label: string }[] = [
   { value: 'admin', label: 'Admin' },
@@ -115,7 +118,18 @@ export function UsersListPage() {
             dataIndex: 'active',
             render: (v) => (v ? <Tag color="green">yes</Tag> : <Tag>no</Tag>),
           },
-          { title: 'Last login', dataIndex: 'lastLoginAt' },
+          {
+            title: 'Last login',
+            dataIndex: 'lastLoginAt',
+            render: (v?: string) =>
+              v ? (
+                <Text className="shellpilot-mono" style={{ fontSize: 12 }}>
+                  {dayjs(v).format('YYYY-MM-DD HH:mm')}
+                </Text>
+              ) : (
+                <Text type="secondary">never</Text>
+              ),
+          },
           {
             title: 'Actions',
             render: (_, r) => (

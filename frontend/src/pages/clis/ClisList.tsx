@@ -1,8 +1,30 @@
-import { useEffect, useState } from 'react';
-import { Button, Drawer, Form, Input, Select, Table, Tag, Space, Popconfirm, App as AntApp, Tabs, Switch } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  App as AntApp,
+  Button,
+  Card,
+  Col,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Row,
+  Select,
+  Space,
+  Switch,
+  Tabs,
+  Tag,
+  Typography,
+} from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { SearchOutlined } from '@ant-design/icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faTerminal } from '@fortawesome/free-solid-svg-icons';
 import { PageHeader } from '../../components/PageHeader';
 import { clisApi, type CreateCliPayload } from '../../api/endpoints/clis';
 import type { CliCatalogItem } from '../../types/api';
+
+const { Text, Paragraph } = Typography;
 
 const ENFORCEMENT_OPTS = [
   { value: 'enforce', label: 'Enforce' },
@@ -10,12 +32,19 @@ const ENFORCEMENT_OPTS = [
   { value: 'audit', label: 'Audit' },
 ];
 
+const ENFORCEMENT_COLORS: Record<string, string> = {
+  enforce: 'red',
+  warn: 'gold',
+  audit: 'default',
+};
+
 export function ClisListPage() {
   const { message } = AntApp.useApp();
+  const navigate = useNavigate();
   const [data, setData] = useState<CliCatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<CliCatalogItem | null>(null);
+  const [query, setQuery] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [form] = Form.useForm<CreateCliPayload>();
 
   const load = async () => {
@@ -35,20 +64,27 @@ export function ClisListPage() {
     load();
   }, []);
 
-  const onSubmit = async () => {
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter(
+      (c) =>
+        c.slug.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q) ||
+        c.vendor?.toLowerCase().includes(q) ||
+        c.description?.toLowerCase().includes(q),
+    );
+  }, [data, query]);
+
+  const onCreate = async () => {
     try {
       const values = await form.validateFields();
-      if (editing) {
-        await clisApi.update(editing.id, values);
-        message.success('CLI updated');
-      } else {
-        await clisApi.create(values);
-        message.success('CLI created');
-      }
-      setOpen(false);
-      setEditing(null);
+      const created = await clisApi.create(values);
+      message.success('CLI created');
+      setCreateOpen(false);
       form.resetFields();
-      load();
+      await load();
+      navigate(`/clis/${created.slug}`);
     } catch (e: unknown) {
       if ((e as { errorFields?: unknown }).errorFields) return;
       const err = e as { response?: { data?: { message?: string } } };
@@ -60,103 +96,93 @@ export function ClisListPage() {
     <>
       <PageHeader
         title="CLIs Catalog"
-        description="Mapped and supported command-line tools. Consumed by the Go wrapper at install time."
+        description="Command-line tools governed by ShellPilot. Open a CLI to edit its metadata and rules."
         extra={
-          <Button
-            type="primary"
-            onClick={() => {
-              setEditing(null);
-              form.resetFields();
-              setOpen(true);
-            }}
-          >
-            New CLI
-          </Button>
+          <Space>
+            <Input
+              prefix={<SearchOutlined />}
+              placeholder="Search by slug, name, vendor…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              allowClear
+              style={{ width: 280 }}
+            />
+            <Button type="primary" onClick={() => setCreateOpen(true)}>
+              New CLI
+            </Button>
+          </Space>
         }
       />
-      <Table<CliCatalogItem>
-        rowKey="id"
-        loading={loading}
-        dataSource={data}
-        columns={[
-          { title: 'Slug', dataIndex: 'slug', render: (v) => <Tag color="blue">{v}</Tag> },
-          { title: 'Name', dataIndex: 'name' },
-          { title: 'Vendor', dataIndex: 'vendor' },
-          { title: 'Env var hint', dataIndex: 'envVarHint' },
-          {
-            title: 'Enforcement',
-            dataIndex: 'defaultEnforcement',
-            render: (v) => (
-              <Tag color={v === 'enforce' ? 'red' : v === 'warn' ? 'gold' : 'default'}>{v}</Tag>
-            ),
-          },
-          {
-            title: 'Active',
-            dataIndex: 'active',
-            render: (v) => (v ? <Tag color="green">yes</Tag> : <Tag>no</Tag>),
-          },
-          {
-            title: 'Actions',
-            render: (_, r) => (
-              <Space>
-                <Button
-                  type="link"
-                  onClick={() => {
-                    setEditing(r);
-                    form.setFieldsValue({
-                      slug: r.slug,
-                      name: r.name,
-                      vendor: r.vendor,
-                      description: r.description,
-                      envVarHint: r.envVarHint,
-                      defaultEnforcement: r.defaultEnforcement,
-                      installCommands: r.installCommands,
-                      docsUrl: r.docsUrl,
-                      icon: r.icon,
-                      active: r.active,
-                    });
-                    setOpen(true);
-                  }}
-                >
-                  Edit
-                </Button>
-                <Popconfirm
-                  title="Delete CLI?"
-                  onConfirm={async () => {
-                    await clisApi.remove(r.id);
-                    message.success('CLI deleted');
-                    load();
-                  }}
-                >
-                  <Button type="link" danger>
-                    Delete
-                  </Button>
-                </Popconfirm>
-              </Space>
-            ),
-          },
-        ]}
-      />
+
+      {filtered.length === 0 && !loading ? (
+        <Empty description={query ? 'No CLIs match your search' : 'No CLIs yet'} />
+      ) : (
+        <Row gutter={[12, 12]}>
+          {filtered.map((cli) => (
+            <Col key={cli.id} xs={24} sm={12} md={8} lg={6} xxl={4}>
+              <Card
+                hoverable
+                onClick={() => navigate(`/clis/${cli.slug}`)}
+                styles={{ body: { padding: 12 } }}
+              >
+                <Space align="start" size={12} style={{ width: '100%' }}>
+                  <CliLogo iconUrl={cli.iconUrl} size={40} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Space size={6} wrap>
+                      <Text strong style={{ fontSize: 13 }}>
+                        {cli.name}
+                      </Text>
+                      {!cli.active && <Tag>inactive</Tag>}
+                    </Space>
+                    <div>
+                      <Text type="secondary" className="shellpilot-mono" style={{ fontSize: 11 }}>
+                        {cli.slug}
+                      </Text>
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      <Tag color={ENFORCEMENT_COLORS[cli.defaultEnforcement] ?? 'default'}>
+                        {cli.defaultEnforcement}
+                      </Tag>
+                    </div>
+                  </div>
+                </Space>
+                {cli.description && (
+                  <Paragraph
+                    type="secondary"
+                    ellipsis={{ rows: 2 }}
+                    style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}
+                  >
+                    {cli.description}
+                  </Paragraph>
+                )}
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      )}
 
       <Drawer
         width={640}
-        open={open}
-        title={editing ? `Edit ${editing.slug}` : 'New CLI'}
+        open={createOpen}
+        title="New CLI"
         onClose={() => {
-          setOpen(false);
-          setEditing(null);
+          setCreateOpen(false);
           form.resetFields();
         }}
         extra={
-          <Button type="primary" onClick={onSubmit}>
-            {editing ? 'Save' : 'Create'}
+          <Button type="primary" onClick={onCreate}>
+            Create
           </Button>
         }
         destroyOnClose
       >
         <Form layout="vertical" form={form}>
-          <Form.Item label="Slug" name="slug" rules={[{ required: true, pattern: /^[a-z0-9][a-z0-9_-]*$/ }]}>
-            <Input placeholder="gh" disabled={!!editing} />
+          <Form.Item
+            label="Slug"
+            name="slug"
+            rules={[{ required: true, pattern: /^[a-z0-9][a-z0-9_-]*$/ }]}
+          >
+            <Input placeholder="gh" />
           </Form.Item>
           <Form.Item label="Name" name="name" rules={[{ required: true }]}>
             <Input placeholder="GitHub CLI" />
@@ -167,6 +193,13 @@ export function ClisListPage() {
           <Form.Item label="Description" name="description">
             <Input.TextArea rows={2} />
           </Form.Item>
+          <Form.Item
+            label="Logo URL"
+            name="iconUrl"
+            tooltip="Public PNG/SVG URL. Shown on the card and detail page."
+          >
+            <Input placeholder="https://…/github.svg" />
+          </Form.Item>
           <Form.Item label="Env var hint" name="envVarHint">
             <Input placeholder="GH_TOKEN" />
           </Form.Item>
@@ -175,9 +208,6 @@ export function ClisListPage() {
           </Form.Item>
           <Form.Item label="Docs URL" name="docsUrl">
             <Input />
-          </Form.Item>
-          <Form.Item label="Icon" name="icon">
-            <Input placeholder="github" />
           </Form.Item>
           <Form.Item label="Active" name="active" valuePropName="checked" initialValue={true}>
             <Switch />
@@ -198,7 +228,7 @@ export function ClisListPage() {
                 label: 'Linux',
                 children: (
                   <Form.Item name={['installCommands', 'linux']}>
-                    <Input.TextArea rows={3} placeholder="curl -fsSL ... | sudo apt-key add -" />
+                    <Input.TextArea rows={3} placeholder="sudo apt install gh" />
                   </Form.Item>
                 ),
               },
@@ -216,5 +246,37 @@ export function ClisListPage() {
         </Form>
       </Drawer>
     </>
+  );
+}
+
+export function CliLogo({ iconUrl, size = 28 }: { iconUrl?: string; size?: number }) {
+  const [broken, setBroken] = useState(false);
+  if (iconUrl && !broken) {
+    return (
+      <img
+        src={iconUrl}
+        alt=""
+        width={size}
+        height={size}
+        onError={() => setBroken(true)}
+        style={{ borderRadius: 6, objectFit: 'contain', background: '#0a0a0a', padding: 2 }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        background: '#2f2f2f',
+        borderRadius: 6,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#b3b3b3',
+      }}
+    >
+      <FontAwesomeIcon icon={faTerminal} style={{ fontSize: size * 0.45 }} />
+    </div>
   );
 }

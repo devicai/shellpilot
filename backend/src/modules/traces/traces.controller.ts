@@ -36,12 +36,19 @@ export class TracesController {
     @Query('decision') decision?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('excludeCli') excludeCli?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
+    // excludeCli accepts a comma-separated list (e.g. "devic-cli-wrapper,devic-wrapper")
+    // so the Dashboard and Traces page can hide the wrapper's own lifecycle
+    // events without a dedicated endpoint.
+    const excluded = excludeCli
+      ? excludeCli.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+      : undefined;
     return this.service.list(
       scope,
-      { cli, userId, decision, from, to },
+      { cli, userId, decision, from, to, excludeCli: excluded },
       {
         limit: limit ? parseInt(limit, 10) : undefined,
         offset: offset ? parseInt(offset, 10) : undefined,
@@ -55,6 +62,14 @@ export class TracesController {
   @ApiOperation({ summary: 'Aggregated stats for traces (JWT)' })
   statsEndpoint(@Query('period') period?: StatsPeriod) {
     return this.stats.aggregate(period ?? '24h');
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('timeseries')
+  @ApiOperation({ summary: 'Trace counts bucketed by hour/day for charts (JWT)' })
+  timeseriesEndpoint(@Query('period') period?: StatsPeriod) {
+    return this.stats.timeseries(period ?? '24h');
   }
 
   @ApiBearerAuth()

@@ -11,6 +11,7 @@ export interface CreateCliPayload {
   installCommands?: { mac?: string; linux?: string; windows?: string };
   docsUrl?: string;
   icon?: string;
+  iconUrl?: string;
   active?: boolean;
 }
 

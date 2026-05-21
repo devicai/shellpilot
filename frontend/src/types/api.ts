@@ -56,6 +56,7 @@ export interface CliCatalogItem {
   installCommands: { mac?: string; linux?: string; windows?: string };
   docsUrl?: string;
   icon?: string;
+  iconUrl?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -125,6 +126,21 @@ export interface TracesStats {
   byDecision: Record<string, number>;
   byCli: Array<{ cli: string; count: number }>;
   byUser: Array<{ userId: string | null; count: number }>;
+}
+
+export interface TracesTimeseriesPoint {
+  ts: string;
+  total: number;
+  allow: number;
+  deny: number;
+  'requires-approval': number;
+}
+
+export interface TracesTimeseries {
+  period: '24h' | '7d' | '30d';
+  from: string;
+  bucket: 'hour' | 'day';
+  points: TracesTimeseriesPoint[];
 }
 
 export interface EvaluationResult {

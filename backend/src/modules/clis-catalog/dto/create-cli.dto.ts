@@ -34,5 +34,9 @@ export class CreateCliDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() docsUrl?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() icon?: string;
+  @ApiPropertyOptional({ description: 'Public URL of the CLI logo (PNG/SVG).' })
+  @IsOptional()
+  @IsString()
+  iconUrl?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
 }
