@@ -23,8 +23,21 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  profileId?: string;
   active: boolean;
   lastLoginAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  description?: string;
+  clis: string[];
+  policyId?: string;
+  defaultCredentials?: Array<{ cli: string; payload: Record<string, unknown> }>;
+  active: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -45,13 +58,44 @@ export interface IssuedApiKey extends ApiKeyMeta {
   token: string;
 }
 
+export type CliAuthMode = 'env' | 'env-multi' | 'file' | 'flag' | 'login-command' | 'none';
+
+// Free-form generic primitives. The backend currently understands `http-form-post`;
+// future kinds (jwt-exchange, etc.) plug in via the registry without changing this shape.
+export interface PostProcessStep {
+  kind: string;
+  [key: string]: unknown;
+}
+
+// `kind` ∈ { file, env, env-file, flag }. The wrapper interprets these generically.
+export interface DeliveryStep {
+  kind: string;
+  [key: string]: unknown;
+}
+
+// String for same-on-all-OS, or per-OS object that the wrapper picks based on
+// its runtime (Darwin → mac, Linux → linux, Windows → windows).
+export type OsPath = string | { mac?: string; linux?: string; windows?: string };
+
+export interface CliAuth {
+  mode: CliAuthMode;
+  envVar?: string;
+  envVars?: string[];
+  filePath?: OsPath;
+  fileFormat?: 'raw' | 'json' | 'yaml';
+  flag?: string;
+  loginCommand?: string;
+  postProcess?: PostProcessStep[];
+  delivery?: DeliveryStep[];
+}
+
 export interface CliCatalogItem {
   id: string;
   slug: string;
   name: string;
   vendor?: string;
   description?: string;
-  envVarHint?: string;
+  auth?: CliAuth;
   defaultEnforcement: 'enforce' | 'warn' | 'audit';
   installCommands: { mac?: string; linux?: string; windows?: string };
   docsUrl?: string;
@@ -73,6 +117,7 @@ export interface Policy {
   enforcement: Enforcement;
   clis: string[];
   webhooks: Record<string, string>;
+  webhookSecret?: string;
   version: number;
   active: boolean;
   createdAt: string;
@@ -95,7 +140,12 @@ export interface CredentialEntry {
   id: string;
   userId: string;
   cli: string;
-  envVar: string;
+  mode: CliAuthMode;
+  envVar?: string;
+  envVars?: string[];
+  filePath?: string;
+  fileFormat?: string;
+  flag?: string;
   createdAt: string;
   updatedAt: string;
 }

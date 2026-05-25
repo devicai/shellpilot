@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   App as AntApp,
+  Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   Drawer,
   Empty,
   Form,
   Input,
+  Modal,
   Row,
   Select,
   Space,
@@ -17,11 +20,13 @@ import {
   Typography,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { SearchOutlined } from '@ant-design/icons';
+import { DownloadOutlined, ImportOutlined, SearchOutlined } from '@ant-design/icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTerminal } from '@fortawesome/free-solid-svg-icons';
 import { PageHeader } from '../../components/PageHeader';
-import { clisApi, type CreateCliPayload } from '../../api/endpoints/clis';
+import { EnforcementTag } from '../../components/PolicyTags';
+import { CliAuthFields } from '../../components/CliAuthFields';
+import { clisApi, type CreateCliPayload, type ImportCatalogResult } from '../../api/endpoints/clis';
 import type { CliCatalogItem } from '../../types/api';
 
 const { Text, Paragraph } = Typography;
@@ -32,12 +37,6 @@ const ENFORCEMENT_OPTS = [
   { value: 'audit', label: 'Audit' },
 ];
 
-const ENFORCEMENT_COLORS: Record<string, string> = {
-  enforce: 'red',
-  warn: 'gold',
-  audit: 'default',
-};
-
 export function ClisListPage() {
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
@@ -46,6 +45,11 @@ export function ClisListPage() {
   const [query, setQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [form] = Form.useForm<CreateCliPayload>();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importContent, setImportContent] = useState('');
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<ImportCatalogResult | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -75,6 +79,44 @@ export function ClisListPage() {
         c.description?.toLowerCase().includes(q),
     );
   }, [data, query]);
+
+  const onExport = async () => {
+    try {
+      const yamlText = await clisApi.exportYaml();
+      const blob = new Blob([yamlText], { type: 'application/yaml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shellpilot-clis-${new Date().toISOString().slice(0, 10)}.yaml`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      message.error(err.response?.data?.message ?? 'Export failed');
+    }
+  };
+
+  const onImport = async () => {
+    if (!importContent.trim()) {
+      message.warning('Paste YAML content first');
+      return;
+    }
+    setImportBusy(true);
+    setImportResult(null);
+    try {
+      const result = await clisApi.importYaml(importContent, importOverwrite);
+      setImportResult(result);
+      const total = result.created.length + result.updated.length;
+      if (total > 0) message.success(`Imported ${total} CLI${total === 1 ? '' : 's'}`);
+      if (result.errors.length > 0) message.warning(`${result.errors.length} entries had errors`);
+      await load();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      message.error(err.response?.data?.message ?? 'Import failed');
+    } finally {
+      setImportBusy(false);
+    }
+  };
 
   const onCreate = async () => {
     try {
@@ -107,6 +149,12 @@ export function ClisListPage() {
               allowClear
               style={{ width: 280 }}
             />
+            <Button icon={<DownloadOutlined />} onClick={onExport}>
+              Export YAML
+            </Button>
+            <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
+              Import
+            </Button>
             <Button type="primary" onClick={() => setCreateOpen(true)}>
               New CLI
             </Button>
@@ -140,9 +188,7 @@ export function ClisListPage() {
                       </Text>
                     </div>
                     <div style={{ marginTop: 6 }}>
-                      <Tag color={ENFORCEMENT_COLORS[cli.defaultEnforcement] ?? 'default'}>
-                        {cli.defaultEnforcement}
-                      </Tag>
+                      <EnforcementTag value={cli.defaultEnforcement} />
                     </div>
                   </div>
                 </Space>
@@ -200,9 +246,7 @@ export function ClisListPage() {
           >
             <Input placeholder="https://…/github.svg" />
           </Form.Item>
-          <Form.Item label="Env var hint" name="envVarHint">
-            <Input placeholder="GH_TOKEN" />
-          </Form.Item>
+          <CliAuthFields form={form} />
           <Form.Item label="Default enforcement" name="defaultEnforcement" initialValue="warn">
             <Select options={ENFORCEMENT_OPTS} />
           </Form.Item>
@@ -245,6 +289,63 @@ export function ClisListPage() {
           />
         </Form>
       </Drawer>
+
+      <Modal
+        open={importOpen}
+        title="Import catalog from YAML"
+        width={720}
+        onCancel={() => {
+          setImportOpen(false);
+          setImportContent('');
+          setImportResult(null);
+        }}
+        onOk={onImport}
+        confirmLoading={importBusy}
+        okText="Import"
+        destroyOnClose
+      >
+        <Paragraph type="secondary" style={{ marginBottom: 8 }}>
+          Paste a list of CLIs in YAML. Top-level <Text code>- slug: …</Text> list or an object with
+          a <Text code>clis:</Text> array. Existing slugs are skipped unless overwrite is enabled.
+        </Paragraph>
+        <Input.TextArea
+          rows={12}
+          value={importContent}
+          onChange={(e) => setImportContent(e.target.value)}
+          placeholder={`clis:\n  - slug: aws\n    name: AWS CLI\n    auth:\n      mode: env-multi\n      envVars: [AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY]`}
+          style={{ fontFamily: 'var(--shellpilot-mono, monospace)' }}
+        />
+        <div style={{ marginTop: 8 }}>
+          <Checkbox checked={importOverwrite} onChange={(e) => setImportOverwrite(e.target.checked)}>
+            Overwrite existing entries with the same slug
+          </Checkbox>
+        </div>
+        {importResult && (
+          <Alert
+            type={importResult.errors.length > 0 ? 'warning' : 'success'}
+            style={{ marginTop: 12 }}
+            message={
+              <Space size={6} wrap>
+                <Tag color="green">Created {importResult.created.length}</Tag>
+                <Tag color="blue">Updated {importResult.updated.length}</Tag>
+                <Tag>Skipped {importResult.skipped.length}</Tag>
+                <Tag color="red">Errors {importResult.errors.length}</Tag>
+              </Space>
+            }
+            description={
+              importResult.errors.length > 0 ? (
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {importResult.errors.map((err, i) => (
+                    <li key={i}>
+                      <Text code>{err.slug ?? '(no slug)'}</Text>: {err.reason}
+                    </li>
+                  ))}
+                </ul>
+              ) : null
+            }
+          />
+        )}
+      </Modal>
     </>
   );
 }

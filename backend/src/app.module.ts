@@ -15,6 +15,7 @@ import { ClisModule } from './modules/clis-catalog/clis.module';
 import { RulesModule } from './modules/rules/rules.module';
 import { CredentialsModule } from './modules/credentials/credentials.module';
 import { TracesModule } from './modules/traces/traces.module';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 
 import { UserSchema } from './modules/users/schema/user.schema';
 import { ApiKeySchema } from './modules/api-keys/schema/api-key.schema';
@@ -23,6 +24,7 @@ import { PolicySchema } from './modules/rules/schema/policy.schema';
 import { RuleSchema } from './modules/rules/schema/rule.schema';
 import { VaultEntrySchema } from './modules/credentials/schema/vault-entry.schema';
 import { TraceSchema } from './modules/traces/schema/trace.schema';
+import { ProfileSchema } from './modules/profiles/schema/profile.schema';
 
 const config = loadConfig();
 
@@ -34,6 +36,7 @@ applyExtensions(PolicySchema, 'Policy', config.extensions.properties);
 applyExtensions(RuleSchema, 'Rule', config.extensions.properties);
 applyExtensions(VaultEntrySchema, 'VaultEntry', config.extensions.properties);
 applyExtensions(TraceSchema, 'Trace', config.extensions.properties);
+applyExtensions(ProfileSchema, 'Profile', config.extensions.properties);
 
 @Module({
   imports: [
@@ -48,6 +51,7 @@ applyExtensions(TraceSchema, 'Trace', config.extensions.properties);
     RulesModule,
     CredentialsModule,
     TracesModule,
+    ProfilesModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: ExtensionScopeInterceptor },

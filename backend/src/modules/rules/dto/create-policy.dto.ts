@@ -22,10 +22,20 @@ export class CreatePolicyDto {
   @IsString({ each: true })
   clis?: string[];
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiPropertyOptional({
+    type: Object,
+    description:
+      'Event → URL map. Known keys: on_deny, on_requires_approval, on_jit_issued, on_binary_missing.',
+    example: { on_deny: 'https://hooks.slack.com/...' },
+  })
   @IsOptional()
   @IsObject()
   webhooks?: Record<string, string>;
+
+  @ApiPropertyOptional({ description: 'Shared HMAC secret used to sign outgoing webhook bodies' })
+  @IsOptional()
+  @IsString()
+  webhookSecret?: string;
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()

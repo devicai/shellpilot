@@ -7,6 +7,7 @@ import {
   faVault,
   faClockRotateLeft,
   faGear,
+  faSitemap,
 } from '@fortawesome/free-solid-svg-icons';
 
 export interface ModuleSubSection {
@@ -35,6 +36,7 @@ export const MODULE_CONFIG: ModuleConfig = {
   sections: [
     { key: 'dashboard', label: 'Dashboard', icon: faGaugeHigh, path: '/dashboard' },
     { key: 'users', label: 'Users', icon: faUsers, path: '/users' },
+    { key: 'profiles', label: 'Profiles', icon: faSitemap, path: '/profiles' },
     { key: 'clis', label: 'CLIs Catalog', icon: faTerminal, path: '/clis' },
     { key: 'credentials', label: 'Credentials', icon: faVault, path: '/credentials' },
     { key: 'traces', label: 'Traces', icon: faClockRotateLeft, path: '/traces' },

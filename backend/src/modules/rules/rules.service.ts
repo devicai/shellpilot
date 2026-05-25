@@ -40,6 +40,7 @@ export class RulesService {
         enforcement: dto.enforcement ?? 'warn',
         clis: dto.clis ?? [],
         webhooks: dto.webhooks ?? {},
+        webhookSecret: dto.webhookSecret,
         active: dto.active ?? false,
         version: 1,
       } as Partial<Policy>,

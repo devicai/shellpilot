@@ -10,11 +10,11 @@ import {
   Space,
   Switch,
   Table,
-  Tag,
   Typography,
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { PageHeader } from '../../components/PageHeader';
+import { DecisionTag } from '../../components/PolicyTags';
 import { tracesApi, type TracesListParams } from '../../api/endpoints/traces';
 import { usersApi } from '../../api/endpoints/users';
 import { clisApi } from '../../api/endpoints/clis';
@@ -92,9 +92,6 @@ export function TracesListPage() {
     setFilters(next);
     load(next);
   };
-
-  const decisionColor = (d: Decision) =>
-    d === 'allow' ? 'green' : d === 'deny' ? 'red' : 'gold';
 
   const userEmailFor = useMemo(
     () => (id?: string) => (id ? usersById[id]?.email ?? id : undefined),
@@ -182,7 +179,7 @@ export function TracesListPage() {
             title: 'Decision',
             dataIndex: 'decision',
             width: 120,
-            render: (v) => <Tag color={decisionColor(v as Decision)}>{v}</Tag>,
+            render: (v) => <DecisionTag value={v as Decision} />,
           },
           {
             title: 'User',
@@ -215,7 +212,7 @@ export function TracesListPage() {
             <div>
               <Text type="secondary">Decision</Text>
               <div>
-                <Tag color={decisionColor(detail.decision)}>{detail.decision}</Tag>
+                <DecisionTag value={detail.decision} />
               </div>
             </div>
             <div>

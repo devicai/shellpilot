@@ -4,8 +4,11 @@ import type { CredentialEntry, Paginated } from '../../types/api';
 export interface StoreCredentialPayload {
   userId?: string;
   cli: string;
-  envVar: string;
-  secret: string;
+  // Shape depends on the CLI's auth.mode:
+  //   env / flag      → { secret: string }
+  //   env-multi       → { values: { [envVar]: string } }
+  //   file            → { content: string }
+  payload: { secret?: string; values?: Record<string, string>; content?: string };
 }
 
 export const credentialsApi = {

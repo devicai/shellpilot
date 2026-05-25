@@ -1,4 +1,5 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { CONFIG } from '../../config/config.loader';
 import { ShellpilotModuleConfig } from '../../config/config.types';
@@ -54,6 +55,7 @@ export class UsersService implements OnModuleInit {
         passwordHash,
         name: dto.name,
         role: dto.role ?? 'viewer',
+        profileId: dto.profileId ? new Types.ObjectId(dto.profileId) : undefined,
         active: dto.active ?? true,
       },
       scope,
@@ -75,7 +77,15 @@ export class UsersService implements OnModuleInit {
   }
 
   async update(id: string, dto: UpdateUserDto, scope: ExtensionScope): Promise<User> {
-    const user = await this.repo.updateById(id, dto as Partial<User>, scope);
+    const patch: Partial<User> & { profileId?: Types.ObjectId | null } = { ...dto } as never;
+    if (dto.profileId !== undefined) {
+      // Allow clearing via empty string from the UI ("no profile") as well as
+      // null. Mongoose treats `null` as a $set null, which clears the field.
+      patch.profileId = dto.profileId
+        ? new Types.ObjectId(dto.profileId)
+        : (null as unknown as Types.ObjectId);
+    }
+    const user = await this.repo.updateById(id, patch as Partial<User>, scope);
     if (!user) throw new NotFoundException('User not found');
     return user;
   }

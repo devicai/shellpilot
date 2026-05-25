@@ -18,6 +18,10 @@ export const TRACE_DECISIONS = [
   'install-error',
   'uninstall-error',
   'already-present',
+  // Credential lifecycle (emitted by the backend at /credentials/issue time —
+  // gives operators visibility into who is fetching which JIT, independently
+  // of whether the wrapper later posts an `allow` trace for the actual exec).
+  'jit-issued',
 ] as const;
 export type TraceDecision = (typeof TRACE_DECISIONS)[number];
 

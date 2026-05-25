@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, SchemaTypes, Types } from 'mongoose';
+import { CLI_AUTH_MODES, CliAuthMode, OsPath } from '../../clis-catalog/schema/cli.schema';
 
 export type VaultEntryDocument = HydratedDocument<VaultEntry>;
 
@@ -11,28 +12,43 @@ export class VaultEntry {
   @Prop({ required: true, lowercase: true, trim: true })
   cli!: string;
 
-  @Prop({ required: true, trim: true })
-  envVar!: string;
+  @Prop({ enum: CLI_AUTH_MODES, required: true })
+  mode!: CliAuthMode;
+
+  @Prop({ trim: true })
+  envVar?: string;
+
+  @Prop({ type: [String], default: undefined })
+  envVars?: string[];
+
+  @Prop({ type: SchemaTypes.Mixed })
+  filePath?: OsPath;
+
+  @Prop({ trim: true })
+  fileFormat?: string;
+
+  @Prop({ trim: true })
+  flag?: string;
 
   @Prop({ required: true })
-  secretCiphertext!: string;
+  envelopeCiphertext!: string;
 
   @Prop({ required: true })
-  secretIv!: string;
+  envelopeIv!: string;
 
   @Prop({ required: true })
-  secretTag!: string;
+  envelopeTag!: string;
 }
 
 export const VaultEntrySchema = SchemaFactory.createForClass(VaultEntry);
-VaultEntrySchema.index({ userId: 1, cli: 1, envVar: 1 }, { unique: true });
+VaultEntrySchema.index({ userId: 1, cli: 1 }, { unique: true });
 
 VaultEntrySchema.set('toJSON', {
   transform: (_doc, ret) => {
     const r = ret as unknown as Record<string, unknown>;
-    delete r.secretCiphertext;
-    delete r.secretIv;
-    delete r.secretTag;
+    delete r.envelopeCiphertext;
+    delete r.envelopeIv;
+    delete r.envelopeTag;
     r.id = r._id;
     delete r._id;
     delete r.__v;

@@ -6,12 +6,14 @@ import { TracesRepository } from './traces.repository';
 import { Trace } from './schema/trace.schema';
 import { CreateTraceDto } from './dto/create-trace.dto';
 import { ExtensionScope, PaginatedResponse } from '../../interfaces';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
 export class TracesService {
   constructor(
     private readonly repo: TracesRepository,
     @Inject(CONFIG) private readonly config: ShellpilotModuleConfig,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   private redactArgs(args?: string[]): string[] {
@@ -33,7 +35,7 @@ export class TracesService {
   }
 
   async ingest(dto: CreateTraceDto, apiKeyPrefix?: string): Promise<Trace> {
-    return this.repo.create(
+    const trace = await this.repo.create(
       {
         cli: dto.cli.toLowerCase(),
         commandPath: dto.commandPath ?? [],
@@ -52,6 +54,12 @@ export class TracesService {
       } as Partial<Trace>,
       {},
     );
+
+    // Fan out to the webhook sinks. Fire-and-forget — the webhook service
+    // handles retries and never throws into the ingest path.
+    this.webhooks.emit(trace);
+
+    return trace;
   }
 
   async list(

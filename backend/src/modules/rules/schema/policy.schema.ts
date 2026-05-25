@@ -7,6 +7,21 @@ export const DECISIONS: Decision[] = ['allow', 'deny', 'requires-approval'];
 export type Enforcement = 'enforce' | 'warn' | 'audit';
 export const ENFORCEMENTS: Enforcement[] = ['enforce', 'warn', 'audit'];
 
+// Event keys a policy can route to a webhook. Maps 1:1 to the trace decisions
+// most operators want to forward — denies and approvals are the load-bearing
+// signals; jit-issued and binary-missing are useful for fleet visibility.
+export type WebhookEvent =
+  | 'on_deny'
+  | 'on_requires_approval'
+  | 'on_jit_issued'
+  | 'on_binary_missing';
+export const WEBHOOK_EVENTS: WebhookEvent[] = [
+  'on_deny',
+  'on_requires_approval',
+  'on_jit_issued',
+  'on_binary_missing',
+];
+
 export type PolicyDocument = HydratedDocument<Policy>;
 
 @Schema({ timestamps: true, collection: 'policies' })
@@ -26,8 +41,18 @@ export class Policy {
   @Prop({ type: [String], default: [] })
   clis!: string[];
 
+  // Map of event → outbound URL. Empty/missing entries are no-ops. Allowed
+  // keys are documented by WEBHOOK_EVENTS; unknown keys are tolerated so
+  // future events ship without a schema migration.
   @Prop({ type: Object, default: {} })
-  webhooks!: Record<string, string>;
+  webhooks!: Partial<Record<WebhookEvent, string>> & Record<string, string>;
+
+  // Shared HMAC secret used to sign every outgoing webhook body. Receivers
+  // verify with `X-ShellPilot-Signature: sha256=<hex>`. Optional — if empty,
+  // payloads ship unsigned (visible recommendation in the UI not to use in
+  // production without a secret).
+  @Prop({ trim: true })
+  webhookSecret?: string;
 
   @Prop({ default: 1 })
   version!: number;

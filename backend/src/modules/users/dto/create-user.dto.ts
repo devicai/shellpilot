@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsEnum, IsMongoId, IsOptional, IsString, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole, USER_ROLES } from '../schema/user.schema';
 
@@ -20,6 +20,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(USER_ROLES)
   role?: UserRole;
+
+  @ApiPropertyOptional({ description: 'Profile (department template) assigned to this user' })
+  @IsOptional()
+  @IsMongoId()
+  profileId?: string;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()

@@ -18,8 +18,13 @@ export class ClisService {
     );
   }
 
-  async list(scope: ExtensionScope, opts: { limit?: number; offset?: number }): Promise<PaginatedResponse<Cli>> {
-    return this.repo.find({}, scope, opts);
+  async list(
+    scope: ExtensionScope,
+    opts: { limit?: number; offset?: number; slug?: string },
+  ): Promise<PaginatedResponse<Cli>> {
+    const filter: Record<string, unknown> = {};
+    if (opts.slug) filter.slug = opts.slug.toLowerCase();
+    return this.repo.find(filter, scope, { limit: opts.limit, offset: opts.offset });
   }
 
   async findOne(idOrSlug: string, scope: ExtensionScope): Promise<Cli> {

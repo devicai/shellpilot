@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export type UserRole = 'admin' | 'operator' | 'viewer';
 export const USER_ROLES: UserRole[] = ['admin', 'operator', 'viewer'];
@@ -19,6 +19,12 @@ export class User {
 
   @Prop({ required: true, enum: USER_ROLES, default: 'viewer' })
   role!: UserRole;
+
+  // Department-style template that bundles allowed CLIs + policy + default
+  // credentials. When set, /credentials/issue and /rules/evaluate consult
+  // the profile instead of falling back to the globally-active policy.
+  @Prop({ type: Types.ObjectId, ref: 'Profile', index: true })
+  profileId?: Types.ObjectId;
 
   @Prop({ default: true })
   active!: boolean;

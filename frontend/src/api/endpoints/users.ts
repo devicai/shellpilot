@@ -6,6 +6,7 @@ export interface CreateUserPayload {
   password: string;
   name: string;
   role?: UserRole;
+  profileId?: string;
   active?: boolean;
 }
 
@@ -13,6 +14,7 @@ export interface UpdateUserPayload {
   email?: string;
   name?: string;
   role?: UserRole;
+  profileId?: string;
   active?: boolean;
 }
 

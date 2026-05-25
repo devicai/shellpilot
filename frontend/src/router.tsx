@@ -9,6 +9,7 @@ import { CliDetailPage } from './pages/clis/CliDetail';
 import { CredentialsListPage } from './pages/credentials/CredentialsList';
 import { TracesListPage } from './pages/traces/TracesList';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { ProfilesListPage } from './pages/profiles/ProfilesList';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
           { path: '/clis', element: <ClisListPage /> },
           { path: '/clis/:slug', element: <CliDetailPage /> },
           { path: '/credentials', element: <CredentialsListPage /> },
+          { path: '/profiles', element: <ProfilesListPage /> },
           { path: '/traces', element: <TracesListPage /> },
           { path: '/settings', element: <SettingsPage /> },
         ],

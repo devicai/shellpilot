@@ -1,8 +1,10 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { ClisService } from './clis.service';
+import { ClisImportExportService } from './import-export.service';
 import { CreateCliDto } from './dto/create-cli.dto';
 import { UpdateCliDto } from './dto/update-cli.dto';
+import { ImportCatalogDto } from './dto/import-catalog.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -13,7 +15,33 @@ import { ExtensionScope } from '../../interfaces';
 @ApiTags('CLIs Catalog')
 @Controller('clis')
 export class ClisController {
-  constructor(private readonly service: ClisService) {}
+  constructor(
+    private readonly service: ClisService,
+    private readonly importExport: ClisImportExportService,
+  ) {}
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'operator')
+  @Post('import')
+  @ApiOperation({
+    summary:
+      'Bulk import a catalog from YAML. Accepts inline content or fetches from a URL (e.g. a devicai/cli-definitions repo).',
+  })
+  import(@Body() dto: ImportCatalogDto, @Scope() scope: ExtensionScope) {
+    return this.importExport.importYaml(dto.content, { overwrite: dto.overwrite }, scope);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'operator')
+  @Get('export.yaml')
+  @Header('Content-Type', 'application/yaml; charset=utf-8')
+  @ApiProduces('application/yaml')
+  @ApiOperation({ summary: 'Export the current catalog as YAML (round-trips through /import)' })
+  export(@Scope() scope: ExtensionScope) {
+    return this.importExport.exportYaml(scope);
+  }
 
   @ApiBearerAuth()
   @UseGuards(JwtOrApiKeyGuard)
@@ -23,10 +51,12 @@ export class ClisController {
     @Scope() scope: ExtensionScope,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('slug') slug?: string,
   ) {
     return this.service.list(scope, {
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
+      slug,
     });
   }
 
