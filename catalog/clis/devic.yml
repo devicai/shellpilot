@@ -1,0 +1,16 @@
+slug: devic
+name: Devic CLI
+version: 1
+vendor: Devic AI
+description: CLI for the Devic AI Platform — assistants, agents, tool servers, feedback.
+docsUrl: https://www.npmjs.com/package/@devicai/cli
+defaultEnforcement: warn
+auth:
+  # The CLI reads its API key from the DEVIC_API_KEY env var (overrides the
+  # value stored by `devic auth login`). ShellPilot injects it just-in-time.
+  mode: env
+  envVar: DEVIC_API_KEY
+installCommands:
+  mac: npm install -g @devicai/cli
+  linux: npm install -g @devicai/cli
+  windows: npm install -g @devicai/cli

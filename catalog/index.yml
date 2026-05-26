@@ -43,3 +43,8 @@ clis:
     category: dev
     iconUrl: https://cdn.simpleicons.org/vercel
     version: 2
+  - slug: devic
+    name: Devic CLI
+    description: CLI for the Devic AI Platform — assistants, agents, tool servers, feedback.
+    category: ai
+    version: 1
