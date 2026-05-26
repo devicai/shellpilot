@@ -81,6 +81,33 @@ class CliAuth {
   delivery?: DeliveryStep[];
 }
 
+// Provenance for entries imported from the public catalog registry. Lets the
+// UI show where an entry came from and detect when a newer version is available
+// upstream. Absent on entries created/edited locally.
+@Schema({ _id: false })
+export class CliSource {
+  @Prop({ trim: true })
+  origin?: string; // 'registry'
+
+  @Prop({ trim: true })
+  repo?: string; // 'devicai/shellpilot' or a local mirror path
+
+  @Prop({ trim: true })
+  ref?: string; // 'main'
+
+  @Prop({ trim: true })
+  path?: string; // 'catalog/clis/gcloud.yml'
+
+  @Prop()
+  version?: number; // registry entry version at import time
+
+  @Prop({ trim: true })
+  sha?: string; // git blob sha at import time (github source only)
+
+  @Prop()
+  importedAt?: Date;
+}
+
 @Schema({ timestamps: true, collection: 'clis' })
 export class Cli {
   @Prop({ required: true, unique: true, index: true, lowercase: true, trim: true })
@@ -115,6 +142,9 @@ export class Cli {
 
   @Prop({ default: true })
   active!: boolean;
+
+  @Prop({ type: CliSource, default: undefined })
+  source?: CliSource;
 }
 
 export const CliSchema = SchemaFactory.createForClass(Cli);

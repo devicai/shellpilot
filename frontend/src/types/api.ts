@@ -64,13 +64,13 @@ export type CliAuthMode = 'env' | 'env-multi' | 'file' | 'flag' | 'login-command
 // future kinds (jwt-exchange, etc.) plug in via the registry without changing this shape.
 export interface PostProcessStep {
   kind: string;
-  [key: string]: unknown;
+  [key: string]: {} | undefined;
 }
 
 // `kind` ∈ { file, env, env-file, flag }. The wrapper interprets these generically.
 export interface DeliveryStep {
   kind: string;
-  [key: string]: unknown;
+  [key: string]: {} | undefined;
 }
 
 // String for same-on-all-OS, or per-OS object that the wrapper picks based on
@@ -89,6 +89,18 @@ export interface CliAuth {
   delivery?: DeliveryStep[];
 }
 
+// Provenance for entries imported from the public catalog registry. Absent on
+// entries created or edited locally.
+export interface CliSource {
+  origin?: string; // 'registry'
+  repo?: string;
+  ref?: string;
+  path?: string;
+  version?: number;
+  sha?: string;
+  importedAt?: string;
+}
+
 export interface CliCatalogItem {
   id: string;
   slug: string;
@@ -102,8 +114,49 @@ export interface CliCatalogItem {
   icon?: string;
   iconUrl?: string;
   active: boolean;
+  source?: CliSource;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- Public catalog registry ---
+
+export interface RegistryListItem {
+  slug: string;
+  name: string;
+  description?: string;
+  category?: string;
+  iconUrl?: string;
+  version: number;
+  imported: boolean;
+  importedVersion?: number;
+  updateAvailable: boolean;
+}
+
+export interface RegistryEntryDetail {
+  meta: {
+    slug: string;
+    name: string;
+    description?: string;
+    category?: string;
+    iconUrl?: string;
+    version: number;
+  };
+  cli: Partial<CliCatalogItem>;
+  sha?: string;
+}
+
+export interface CatalogUpdate {
+  slug: string;
+  name: string;
+  importedVersion: number;
+  availableVersion: number;
+}
+
+export interface ImportRegistryResult {
+  action: 'created' | 'updated';
+  slug: string;
+  version: number;
 }
 
 export type Decision = 'allow' | 'deny' | 'requires-approval';

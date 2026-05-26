@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   App as AntApp,
   Alert,
+  Badge,
   Button,
   Card,
   Checkbox,
@@ -20,14 +21,15 @@ import {
   Typography,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { DownloadOutlined, ImportOutlined, SearchOutlined } from '@ant-design/icons';
+import { DownloadOutlined, ImportOutlined, SearchOutlined, ShopOutlined } from '@ant-design/icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTerminal } from '@fortawesome/free-solid-svg-icons';
 import { PageHeader } from '../../components/PageHeader';
 import { EnforcementTag } from '../../components/PolicyTags';
 import { CliAuthFields } from '../../components/CliAuthFields';
 import { clisApi, type CreateCliPayload, type ImportCatalogResult } from '../../api/endpoints/clis';
-import type { CliCatalogItem } from '../../types/api';
+import { catalogApi } from '../../api/endpoints/catalog';
+import type { CatalogUpdate, CliCatalogItem } from '../../types/api';
 
 const { Text, Paragraph } = Typography;
 
@@ -41,6 +43,7 @@ export function ClisListPage() {
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const [data, setData] = useState<CliCatalogItem[]>([]);
+  const [updates, setUpdates] = useState<CatalogUpdate[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -62,11 +65,19 @@ export function ClisListPage() {
     } finally {
       setLoading(false);
     }
+    // Best-effort: surface registry updates without blocking the catalog view.
+    try {
+      setUpdates(await catalogApi.listUpdates());
+    } catch {
+      /* registry may be unreachable; ignore */
+    }
   };
 
   useEffect(() => {
     load();
   }, []);
+
+  const updatedSlugs = useMemo(() => new Set(updates.map((u) => u.slug)), [updates]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -149,6 +160,11 @@ export function ClisListPage() {
               allowClear
               style={{ width: 280 }}
             />
+            <Badge count={updates.length} size="small" offset={[-4, 4]}>
+              <Button icon={<ShopOutlined />} onClick={() => navigate('/catalog')}>
+                Browse registry
+              </Button>
+            </Badge>
             <Button icon={<DownloadOutlined />} onClick={onExport}>
               Export YAML
             </Button>
@@ -181,6 +197,7 @@ export function ClisListPage() {
                         {cli.name}
                       </Text>
                       {!cli.active && <Tag>inactive</Tag>}
+                      {updatedSlugs.has(cli.slug) && <Tag color="orange">update</Tag>}
                     </Space>
                     <div>
                       <Text type="secondary" className="shellpilot-mono" style={{ fontSize: 11 }}>

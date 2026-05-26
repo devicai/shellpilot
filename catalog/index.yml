@@ -1,0 +1,45 @@
+# ShellPilot — official CLI catalog index.
+#
+# This is the lightweight browse list. Each entry's full definition lives in
+# clis/<slug>.yml. Bump `version` whenever you change an entry's YAML so that
+# imported tenants are offered the update (CI enforces the bump).
+#
+# Source of truth. Fetched by the backend at ref=main; imports are pinned per
+# tenant to the version they imported (updates are opt-in).
+clis:
+  - slug: gh
+    name: GitHub CLI
+    description: GitHub from the command line — repos, PRs, issues, releases.
+    category: dev
+    iconUrl: https://cdn.simpleicons.org/github
+    version: 1
+  - slug: gcloud
+    name: Google Cloud CLI
+    description: Manage Google Cloud resources and services.
+    category: cloud
+    iconUrl: https://cdn.simpleicons.org/googlecloud
+    version: 1
+  - slug: stripe
+    name: Stripe CLI
+    description: Build, test and manage your Stripe integration.
+    category: payments
+    iconUrl: https://cdn.simpleicons.org/stripe
+    version: 1
+  - slug: aws
+    name: AWS CLI
+    description: Manage AWS services from the command line.
+    category: cloud
+    iconUrl: https://cdn.jsdelivr.net/gh/devicons/devicon/icons/amazonwebservices/amazonwebservices-original-wordmark.svg
+    version: 1
+  - slug: docker
+    name: Docker CLI
+    description: Build and run containers.
+    category: dev
+    iconUrl: https://cdn.simpleicons.org/docker
+    version: 1
+  - slug: vercel
+    name: Vercel CLI
+    description: Deploy and manage Vercel projects from the command line.
+    category: dev
+    iconUrl: https://cdn.simpleicons.org/vercel
+    version: 2

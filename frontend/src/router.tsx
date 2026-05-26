@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { UsersListPage } from './pages/users/UsersList';
 import { ClisListPage } from './pages/clis/ClisList';
+import { CatalogRegistryPage } from './pages/clis/CatalogRegistry';
 import { CliDetailPage } from './pages/clis/CliDetail';
 import { CredentialsListPage } from './pages/credentials/CredentialsList';
 import { TracesListPage } from './pages/traces/TracesList';
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/users', element: <UsersListPage /> },
           { path: '/clis', element: <ClisListPage /> },
+          { path: '/catalog', element: <CatalogRegistryPage /> },
           { path: '/clis/:slug', element: <CliDetailPage /> },
           { path: '/credentials', element: <CredentialsListPage /> },
           { path: '/profiles', element: <ProfilesListPage /> },

@@ -1,0 +1,18 @@
+slug: stripe
+name: Stripe CLI
+version: 1
+vendor: Stripe
+description: Build, test and manage your Stripe integration.
+docsUrl: https://stripe.com/docs/stripe-cli
+iconUrl: https://cdn.simpleicons.org/stripe
+defaultEnforcement: enforce
+auth:
+  mode: env
+  envVar: STRIPE_API_KEY
+installCommands:
+  mac: brew install stripe/stripe-cli/stripe
+  linux: |
+    curl -s https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg >/dev/null
+    echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" | sudo tee /etc/apt/sources.list.d/stripe.list
+    sudo apt update && sudo apt install stripe
+  windows: scoop install stripe

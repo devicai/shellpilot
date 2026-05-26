@@ -95,6 +95,16 @@ export class ClisImportExportService {
     return yaml.dump({ clis }, { lineWidth: 120, noRefs: true, sortKeys: false });
   }
 
+  /**
+   * Validate+normalise a single raw entry (one parsed YAML object) into the
+   * writable Cli shape. Public so the catalog-registry import path can reuse the
+   * exact same validation the bulk YAML import uses. Throws BadRequestException
+   * on any invalid/unknown field.
+   */
+  validateEntry(raw: unknown): Partial<Cli> {
+    return this.normalizeEntry(raw);
+  }
+
   private coerceEntries(doc: unknown): unknown[] {
     if (Array.isArray(doc)) return doc;
     if (doc && typeof doc === 'object' && Array.isArray((doc as { clis?: unknown }).clis)) {

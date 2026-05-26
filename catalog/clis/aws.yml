@@ -1,0 +1,19 @@
+slug: aws
+name: AWS CLI
+version: 1
+vendor: Amazon
+description: Manage AWS services from the command line.
+docsUrl: https://docs.aws.amazon.com/cli/
+iconUrl: https://cdn.jsdelivr.net/gh/devicons/devicon/icons/amazonwebservices/amazonwebservices-original-wordmark.svg
+defaultEnforcement: warn
+auth:
+  mode: env-multi
+  envVars:
+    - AWS_ACCESS_KEY_ID
+    - AWS_SECRET_ACCESS_KEY
+installCommands:
+  mac: brew install awscli
+  linux: |
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+    unzip -q awscliv2.zip && sudo ./aws/install
+  windows: winget install Amazon.AWSCLI
