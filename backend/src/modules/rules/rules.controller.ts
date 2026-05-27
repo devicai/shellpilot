@@ -6,7 +6,8 @@ import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Scope } from '../../common/decorators/scope.decorator';
-import { ExtensionScope } from '../../interfaces';
+import { CurrentApiKey } from '../../common/decorators/current-api-key.decorator';
+import { AuthenticatedApiKey, ExtensionScope } from '../../interfaces';
 import { RulesService } from './rules.service';
 import { PolicyEvaluatorService } from './evaluator/policy-evaluator.service';
 import { PolicyYamlService } from './yaml/policy-yaml.service';
@@ -35,9 +36,9 @@ export class RulesController {
   @Get('active.yaml')
   @Header('Content-Type', 'application/yaml; charset=utf-8')
   @ApiProduces('application/yaml')
-  @ApiOperation({ summary: 'Active policy compiled to YAML (Go wrapper format)' })
-  getActivePolicyYaml() {
-    return this.yamlCompiler.compileActivePolicyYaml();
+  @ApiOperation({ summary: "Effective policy for the API key's identity, compiled to YAML (Go wrapper)" })
+  getActivePolicyYaml(@CurrentApiKey() apiKey: AuthenticatedApiKey) {
+    return this.yamlCompiler.compileEffectivePolicyYamlForUser(apiKey.userId);
   }
 
   // --- Policies (JWT) ---
@@ -156,8 +157,13 @@ export class RulesController {
   @ApiSecurity('x-api-key')
   @UseGuards(ApiKeyAuthGuard)
   @Post('evaluate')
-  @ApiOperation({ summary: 'Evaluate a CLI command against the active policy' })
-  evaluate(@Body() dto: EvaluateDto) {
-    return this.evaluator.evaluate(dto.cli, dto.args, dto.policyId);
+  @ApiOperation({ summary: "Evaluate a CLI command against the API key's effective policy" })
+  evaluate(@Body() dto: EvaluateDto, @CurrentApiKey() apiKey: AuthenticatedApiKey) {
+    // Identity comes from the authenticated key, never the body (a key must not
+    // evaluate as another user). dto.policyId stays as an explicit admin/test override.
+    return this.evaluator.evaluate(dto.cli, dto.args, {
+      userId: apiKey.userId,
+      policyOverrideId: dto.policyId,
+    });
   }
 }

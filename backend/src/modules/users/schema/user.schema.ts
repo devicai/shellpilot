@@ -4,6 +4,11 @@ import { HydratedDocument, Types } from 'mongoose';
 export type UserRole = 'admin' | 'operator' | 'viewer';
 export const USER_ROLES: UserRole[] = ['admin', 'operator', 'viewer'];
 
+// 'human' = a person using the console; 'service' = a non-human identity for an
+// agent or automation, authenticated via API key. Same entity, different intent.
+export type UserType = 'human' | 'service';
+export const USER_TYPES: UserType[] = ['human', 'service'];
+
 export type UserDocument = HydratedDocument<User>;
 
 @Schema({ timestamps: true, collection: 'users' })
@@ -19,6 +24,15 @@ export class User {
 
   @Prop({ required: true, enum: USER_ROLES, default: 'viewer' })
   role!: UserRole;
+
+  @Prop({ required: true, enum: USER_TYPES, default: 'human' })
+  type!: UserType;
+
+  // Policy assigned directly to this user. Highest precedence when resolving the
+  // effective policy for the wrapper (see PolicyResolutionService): direct
+  // policyId → profile.policyId → globally-active policy.
+  @Prop({ type: Types.ObjectId, ref: 'Policy', index: true })
+  policyId?: Types.ObjectId;
 
   // Department-style template that bundles allowed CLIs + policy + default
   // credentials. When set, /credentials/issue and /rules/evaluate consult

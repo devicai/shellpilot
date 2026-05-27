@@ -9,7 +9,9 @@ import { RulesService } from './rules.service';
 import { RulesController } from './rules.controller';
 import { PolicyEvaluatorService } from './evaluator/policy-evaluator.service';
 import { PolicyYamlService } from './yaml/policy-yaml.service';
+import { PolicyResolutionService } from './policy-resolution.service';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { ProfilesModule } from '../profiles/profiles.module';
 
 @Module({
   imports: [
@@ -19,9 +21,17 @@ import { WebhooksModule } from '../webhooks/webhooks.module';
       { name: Cli.name, schema: CliSchema },
     ]),
     forwardRef(() => WebhooksModule),
+    ProfilesModule,
   ],
   controllers: [RulesController],
-  providers: [PoliciesRepository, RulesRepository, RulesService, PolicyEvaluatorService, PolicyYamlService],
-  exports: [PolicyEvaluatorService, RulesService, PoliciesRepository],
+  providers: [
+    PoliciesRepository,
+    RulesRepository,
+    RulesService,
+    PolicyEvaluatorService,
+    PolicyYamlService,
+    PolicyResolutionService,
+  ],
+  exports: [PolicyEvaluatorService, RulesService, PoliciesRepository, PolicyResolutionService],
 })
 export class RulesModule {}
