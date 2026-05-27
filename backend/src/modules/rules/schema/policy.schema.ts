@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export type Decision = 'allow' | 'deny' | 'requires-approval';
 export const DECISIONS: Decision[] = ['allow', 'deny', 'requires-approval'];
@@ -59,6 +59,13 @@ export class Policy {
 
   @Prop({ default: false, index: true })
   active!: boolean;
+
+  // When set, this policy is the "individual rules" of a single user: it is
+  // edited only from that user's detail page and is hidden from the global
+  // policies list (which holds shared policies linked to profiles). Unset =
+  // global/shared policy. An owner-scoped policy is never the global fallback.
+  @Prop({ type: Types.ObjectId, ref: 'User', index: true })
+  ownerUserId?: Types.ObjectId;
 }
 
 export const PolicySchema = SchemaFactory.createForClass(Policy);

@@ -18,6 +18,8 @@ export interface CreatePolicyPayload {
   webhooks?: Partial<Record<WebhookEvent, string>>;
   webhookSecret?: string;
   active?: boolean;
+  // Marks the policy as a user's individual rules (hidden from the global list).
+  ownerUserId?: string;
 }
 
 export type UpdatePolicyPayload = Partial<CreatePolicyPayload>;
