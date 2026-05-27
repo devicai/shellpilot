@@ -22,7 +22,10 @@ export class RulesService {
   // ---- Policies ----
 
   async listPolicies(scope: ExtensionScope, opts: { limit?: number; offset?: number }): Promise<PaginatedResponse<Policy>> {
-    return this.policies.find({}, scope, opts);
+    // The global list holds only shared policies (linked to profiles / global
+    // fallback). Per-user "individual rules" (ownerUserId set) are excluded —
+    // they're reached only from their owner's detail page (getPolicy by id).
+    return this.policies.find({ ownerUserId: { $exists: false } }, scope, opts);
   }
 
   async getPolicy(id: string, scope: ExtensionScope): Promise<Policy> {
@@ -32,6 +35,8 @@ export class RulesService {
   }
 
   async createPolicy(dto: CreatePolicyDto, scope: ExtensionScope): Promise<Policy> {
+    // An individual (owner-scoped) policy is never the global fallback.
+    const owned = Boolean(dto.ownerUserId);
     const policy = (await this.policies.create(
       {
         name: dto.name,
@@ -41,8 +46,9 @@ export class RulesService {
         clis: dto.clis ?? [],
         webhooks: dto.webhooks ?? {},
         webhookSecret: dto.webhookSecret,
-        active: dto.active ?? false,
+        active: owned ? false : (dto.active ?? false),
         version: 1,
+        ...(owned ? { ownerUserId: new Types.ObjectId(dto.ownerUserId) } : {}),
       } as Partial<Policy>,
       scope,
     )) as Policy & { _id: Types.ObjectId };

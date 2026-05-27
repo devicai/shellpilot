@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEnum, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsMongoId, IsObject, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Decision, DECISIONS, Enforcement, ENFORCEMENTS } from '../schema/policy.schema';
 
@@ -41,4 +41,12 @@ export class CreatePolicyDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      "Owner user id. Marks the policy as that user's individual rules — hidden from the global list and never the global fallback.",
+  })
+  @IsOptional()
+  @IsMongoId()
+  ownerUserId?: string;
 }

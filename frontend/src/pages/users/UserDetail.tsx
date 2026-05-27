@@ -20,7 +20,7 @@ import type {
 const { Title, Text, Paragraph } = Typography;
 const DECISIONS: Decision[] = ['allow', 'deny', 'requires-approval'];
 
-type EffSource = 'direct' | 'profile' | 'global' | 'none';
+type AccessMode = 'profile' | 'policy' | 'individual';
 
 function computeEffectiveId(u: User, profs: Profile[], pols: Policy[]): string | null {
   if (u.policyId) return u.policyId;
@@ -48,16 +48,16 @@ export function UserDetailPage() {
 
   const [user, setUser] = useState<User | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [policies, setPolicies] = useState<Policy[]>([]);
+  const [policies, setPolicies] = useState<Policy[]>([]); // global (shared) only
   const [clis, setClis] = useState<CliCatalogItem[]>([]);
   const [keys, setKeys] = useState<ApiKeyMeta[]>([]);
   const [creds, setCreds] = useState<CredentialEntry[]>([]);
-  const [effId, setEffId] = useState<string | null>(null);
+  const [effPolicy, setEffPolicy] = useState<Policy | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
   const [idForm] = Form.useForm();
   const [ruleForm] = Form.useForm();
   const [credForm] = Form.useForm();
-  const [accessMode, setAccessMode] = useState<'profile' | 'policy'>('profile');
+  const [accessMode, setAccessMode] = useState<AccessMode>('profile');
   const [ruleModal, setRuleModal] = useState<{ open: boolean; editing?: Rule }>({ open: false });
   const [credOpen, setCredOpen] = useState(false);
 
@@ -79,37 +79,52 @@ export function UserDetailPage() {
     setClis(cl.data);
     setKeys(ks.data.filter((k) => k.userId === id));
     setCreds(cr.data.filter((c) => c.userId === id));
-    setAccessMode(u.policyId ? 'policy' : 'profile');
     idForm.setFieldsValue({ name: u.name, role: u.role, type: u.type, active: u.active });
 
+    // Resolve the effective policy by id (works for individual/owner policies
+    // that the global list omits); a dangling reference 404s → treated as none.
     const eid = computeEffectiveId(u, pf.data, pol.data);
-    setEffId(eid);
-    setRules(eid ? await rulesApi.listRules(eid) : []);
+    let ep: Policy | null = null;
+    let rs: Rule[] = [];
+    if (eid) {
+      try {
+        ep = await rulesApi.getPolicy(eid);
+        rs = await rulesApi.listRules(eid);
+      } catch {
+        ep = null;
+        rs = [];
+      }
+    }
+    setEffPolicy(ep);
+    setRules(rs);
+    const individual = !!ep && String(ep.ownerUserId ?? '') === u.id;
+    setAccessMode(individual ? 'individual' : u.policyId ? 'policy' : 'profile');
   };
   useEffect(() => {
     void load();
   }, [id]);
 
-  const activePolicy = useMemo(() => policies.find((p) => p.active), [policies]);
-  const effPolicy = useMemo(() => policies.find((p) => p.id === effId) ?? null, [policies, effId]);
-  const effSource: EffSource = useMemo(() => {
-    if (!user) return 'none';
-    if (user.policyId) return 'direct';
-    if (user.profileId && profiles.find((p) => p.id === user.profileId)?.policyId) return 'profile';
-    return activePolicy ? 'global' : 'none';
-  }, [user, profiles, activePolicy]);
-  const editable = effSource === 'direct';
+  const isIndividual = useMemo(
+    () => !!effPolicy && !!user && String(effPolicy.ownerUserId ?? '') === user.id,
+    [effPolicy, user],
+  );
+  const editable = isIndividual;
+
+  // Value for the "Direct policy" select: only show it if the assigned policy
+  // is a global one (owner policies live under the Individual rules tab).
+  const directGlobalValue = useMemo(
+    () => policies.find((p) => p.id === user?.policyId)?.id,
+    [policies, user],
+  );
 
   const effLabel = useMemo(() => {
     if (!user) return '';
-    if (user.policyId) return `direct → ${policies.find((p) => p.id === user.policyId)?.name ?? user.policyId}`;
-    if (user.profileId) {
-      const prof = profiles.find((p) => p.id === user.profileId);
-      const pol = prof?.policyId ? policies.find((p) => p.id === prof.policyId)?.name : null;
-      return pol ? `profile "${prof?.name}" → ${pol}` : `profile "${prof?.name}" → global fallback`;
-    }
-    return `global fallback → ${activePolicy?.name ?? 'none'}`;
-  }, [user, profiles, policies, activePolicy]);
+    if (isIndividual) return 'Individual rules';
+    if (!effPolicy) return user.policyId ? 'unassigned (referenced policy no longer exists)' : 'no governing policy';
+    if (user.policyId) return `direct → ${effPolicy.name}`;
+    if (user.profileId) return `profile → ${effPolicy.name}`;
+    return `global fallback → ${effPolicy.name}`;
+  }, [user, isIndividual, effPolicy]);
 
   // credential modal is mode-aware — these hooks must run on every render,
   // so they live above the `if (!user)` guard (React rules of hooks).
@@ -131,25 +146,25 @@ export function UserDetailPage() {
     void load();
   };
 
-  const setProfile = async (profileId: string) => {
+  const setProfile = async (profileId?: string) => {
     await usersApi.update(id, { profileId: profileId || '', policyId: '' });
     void load();
   };
-  const setPolicy = async (policyId: string) => {
+  const setPolicy = async (policyId?: string) => {
     await usersApi.update(id, { policyId: policyId || '', profileId: '' });
     void load();
   };
 
-  // Create a dedicated policy owned by this user, copying the CLIs + rules of
-  // whatever currently governs them (profile/global) so editing here never
-  // mutates a shared policy used by other users.
-  const customizeForUser = async () => {
+  // Give the user their own owner-scoped policy ("individual rules"), copying
+  // whatever currently governs them so editing here never mutates a shared one.
+  const createIndividualRules = async () => {
     const created = await rulesApi.createPolicy({
-      name: `user-${user.email}`,
-      description: `Dedicated policy for ${user.email}`,
+      name: `Individual rules — ${user.email}`,
+      description: `Private CLIs & rules for ${user.email}`,
       defaultEffect: effPolicy?.defaultEffect ?? 'deny',
       enforcement: effPolicy?.enforcement ?? 'warn',
       clis: effPolicy?.clis ?? [],
+      ownerUserId: user.id,
     });
     for (const r of rules) {
       await rulesApi.createRule(created.id, {
@@ -157,23 +172,22 @@ export function UserDetailPage() {
       });
     }
     await usersApi.update(id, { policyId: created.id, profileId: '' });
-    message.success('Dedicated policy created for this user — now editable below');
-    setAccessMode('policy');
+    message.success('Individual rules created — editable below');
+    setAccessMode('individual');
     void load();
   };
 
   const saveClis = async (next: string[]) => {
-    if (!effId) return;
-    await rulesApi.updatePolicy(effId, { clis: next });
-    message.success('CLIs updated');
+    if (!effPolicy) return;
+    await rulesApi.updatePolicy(effPolicy.id, { clis: next });
     void load();
   };
 
   const saveRule = async () => {
-    if (!effId) return;
+    if (!effPolicy) return;
     const v = await ruleForm.validateFields();
     if (ruleModal.editing) await rulesApi.updateRule(ruleModal.editing.id, v);
-    else await rulesApi.createRule(effId, v);
+    else await rulesApi.createRule(effPolicy.id, v);
     setRuleModal({ open: false });
     void load();
   };
@@ -246,8 +260,12 @@ export function UserDetailPage() {
       <Card title="Access" style={{ marginBottom: 16 }}>
         <Segmented
           value={accessMode}
-          onChange={(v) => setAccessMode(v as 'profile' | 'policy')}
-          options={[{ value: 'profile', label: 'Profile' }, { value: 'policy', label: 'Direct policy' }]}
+          onChange={(v) => setAccessMode(v as AccessMode)}
+          options={[
+            { value: 'profile', label: 'Profile' },
+            { value: 'policy', label: 'Direct policy' },
+            { value: 'individual', label: 'Individual rules' },
+          ]}
           style={{ marginBottom: 16 }}
         />
         {accessMode === 'profile' ? (
@@ -261,17 +279,24 @@ export function UserDetailPage() {
               options={profiles.map((p) => ({ value: p.id, label: p.name }))}
             />
           </Form.Item>
-        ) : (
-          <Form.Item label="Policy assigned directly" style={{ marginBottom: 0 }}>
+        ) : accessMode === 'policy' ? (
+          <Form.Item label="Shared policy assigned directly" tooltip="A global policy from the Policies catalog. Edited in Policies, not here.">
             <Select
               allowClear
               style={{ width: 360 }}
-              placeholder="Select a policy"
-              value={user.policyId}
+              placeholder="Select a shared policy"
+              value={directGlobalValue}
               onChange={(v) => setPolicy(v)}
               options={policies.map((p) => ({ value: p.id, label: p.name }))}
             />
           </Form.Item>
+        ) : isIndividual ? (
+          <Text type="secondary">This user has their own CLIs &amp; rules — edit them in the card below.</Text>
+        ) : (
+          <Space direction="vertical">
+            <Text type="secondary">Give this user a private set of CLIs &amp; rules, independent of any shared policy or profile.</Text>
+            <Button type="primary" onClick={createIndividualRules}>Create individual rules</Button>
+          </Space>
         )}
         <Alert style={{ marginTop: 16 }} type="info" showIcon message={<>Effective policy: <Text strong>{effLabel}</Text></>} />
       </Card>
@@ -282,7 +307,6 @@ export function UserDetailPage() {
         extra={editable && (
           <Button
             icon={<PlusOutlined />}
-            disabled={!effId}
             onClick={() => { ruleForm.resetFields(); ruleForm.setFieldsValue({ effect: 'deny', priority: 0 }); setRuleModal({ open: true }); }}
           >
             New rule
@@ -294,13 +318,11 @@ export function UserDetailPage() {
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
-            message={effSource === 'none'
-              ? 'This user has no governing policy yet'
-              : `These CLIs & rules come from the ${effSource === 'profile' ? 'assigned profile' : 'global fallback'} and are shared`}
-            description={effSource === 'none'
-              ? 'Create a dedicated policy to define which CLIs this user can run and the rules that govern them.'
-              : 'Editing here would affect everyone using it. Create a dedicated policy for this user (the current CLIs and rules are copied) to customize it safely.'}
-            action={<Button size="small" onClick={customizeForUser}>Create dedicated policy for this user</Button>}
+            message={effPolicy ? 'These CLIs & rules are shared' : 'This user has no CLIs or rules yet'}
+            description={effPolicy
+              ? 'They come from the assigned profile or a shared policy, so editing here would affect everyone using it. Create individual rules for this user (the current CLIs and rules are copied) to customize them safely.'
+              : 'Create individual rules to define which CLIs this user can run and the rules that govern them.'}
+            action={<Button size="small" onClick={createIndividualRules}>Create individual rules</Button>}
           />
         )}
 
@@ -308,8 +330,8 @@ export function UserDetailPage() {
           <Select
             mode="multiple"
             allowClear
-            disabled={!editable || !effId}
-            placeholder={effId ? 'Select CLIs' : 'No policy'}
+            disabled={!editable}
+            placeholder={editable ? 'Select CLIs' : 'Read-only'}
             value={effPolicy?.clis ?? []}
             onChange={(v: string[]) => void saveClis(v)}
             options={clis.map((c) => ({ value: c.slug, label: `${c.name} (${c.slug})` }))}
@@ -320,7 +342,7 @@ export function UserDetailPage() {
           rowKey="id"
           dataSource={rules}
           pagination={false}
-          locale={{ emptyText: effId ? 'No rules' : 'No governing policy' }}
+          locale={{ emptyText: effPolicy ? 'No rules' : 'No governing policy' }}
           columns={[
             { title: 'CLI', dataIndex: 'cli', render: (c) => <Text code>{c}</Text> },
             { title: 'Path', dataIndex: 'path', render: (p) => <Text code>{p}</Text> },
@@ -345,14 +367,7 @@ export function UserDetailPage() {
       <Card
         title="Credentials"
         style={{ marginBottom: 16 }}
-        extra={(
-          <Button
-            icon={<PlusOutlined />}
-            onClick={() => { credForm.resetFields(); setCredOpen(true); }}
-          >
-            Store credential
-          </Button>
-        )}
+        extra={<Button icon={<PlusOutlined />} onClick={() => { credForm.resetFields(); setCredOpen(true); }}>Store credential</Button>}
       >
         <Paragraph type="secondary" style={{ marginTop: -8 }}>
           Encrypted at rest (AES-256-GCM). Resolved as short-lived JIT tokens for the wrapper; never returned in plaintext.

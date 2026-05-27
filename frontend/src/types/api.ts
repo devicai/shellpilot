@@ -176,6 +176,8 @@ export interface Policy {
   webhookSecret?: string;
   version: number;
   active: boolean;
+  // Set when this is a user's individual rules (hidden from the global list).
+  ownerUserId?: string;
   createdAt: string;
   updatedAt: string;
 }

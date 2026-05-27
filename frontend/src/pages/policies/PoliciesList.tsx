@@ -6,7 +6,7 @@ import { rulesApi } from '../../api/endpoints/rules';
 import { DecisionTag, EnforcementTag } from '../../components/PolicyTags';
 import type { Policy } from '../../types/api';
 
-const { Title } = Typography;
+const { Title, Paragraph } = Typography;
 
 export function PoliciesListPage() {
   const navigate = useNavigate();
@@ -46,10 +46,14 @@ export function PoliciesListPage() {
 
   return (
     <div>
-      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 4 }}>
         <Title level={3} style={{ margin: 0 }}>Policies</Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={create}>New policy</Button>
       </Space>
+      <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+        Shared policies — link them to profiles or set one as the global fallback. A user's
+        individual rules are managed from their own page and don't appear here.
+      </Paragraph>
       <Card>
         <Table<Policy>
           rowKey="id"
