@@ -1,18 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Alert, App, Button, Card, Form, Input, Popconfirm, Segmented, Select, Space, Switch, Table, Tag, Typography,
+  Alert, App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm,
+  Segmented, Select, Space, Switch, Table, Tag, Typography,
 } from 'antd';
 import { CopyOutlined, DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { usersApi } from '../../api/endpoints/users';
 import { profilesApi } from '../../api/endpoints/profiles';
 import { rulesApi } from '../../api/endpoints/rules';
+import { clisApi } from '../../api/endpoints/clis';
 import { apiKeysApi } from '../../api/endpoints/apiKeys';
 import { credentialsApi } from '../../api/endpoints/credentials';
 import { authApi } from '../../api/endpoints/auth';
-import type { ApiKeyMeta, CredentialEntry, Policy, Profile, User } from '../../types/api';
+import { DecisionTag } from '../../components/PolicyTags';
+import type {
+  ApiKeyMeta, CliAuthMode, CliCatalogItem, CredentialEntry, Decision, Policy, Profile, Rule, User,
+} from '../../types/api';
 
 const { Title, Text, Paragraph } = Typography;
+const DECISIONS: Decision[] = ['allow', 'deny', 'requires-approval'];
+
+type EffSource = 'direct' | 'profile' | 'global' | 'none';
+
+function computeEffectiveId(u: User, profs: Profile[], pols: Policy[]): string | null {
+  if (u.policyId) return u.policyId;
+  if (u.profileId) {
+    const pr = profs.find((p) => p.id === u.profileId);
+    if (pr?.policyId) return pr.policyId;
+  }
+  return pols.find((p) => p.active)?.id ?? null;
+}
 
 function CodeBlock({ value }: { value: string }) {
   const { message } = App.useApp();
@@ -32,36 +49,58 @@ export function UserDetailPage() {
   const [user, setUser] = useState<User | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [policies, setPolicies] = useState<Policy[]>([]);
+  const [clis, setClis] = useState<CliCatalogItem[]>([]);
   const [keys, setKeys] = useState<ApiKeyMeta[]>([]);
   const [creds, setCreds] = useState<CredentialEntry[]>([]);
+  const [effId, setEffId] = useState<string | null>(null);
+  const [rules, setRules] = useState<Rule[]>([]);
   const [idForm] = Form.useForm();
+  const [ruleForm] = Form.useForm();
+  const [credForm] = Form.useForm();
   const [accessMode, setAccessMode] = useState<'profile' | 'policy'>('profile');
+  const [ruleModal, setRuleModal] = useState<{ open: boolean; editing?: Rule }>({ open: false });
+  const [credOpen, setCredOpen] = useState(false);
 
   const host = window.location.host;
   const apiBase = `${window.location.origin}/api/v1`;
 
   const load = async () => {
-    const [u, pf, pol, ks, cr] = await Promise.all([
+    const [u, pf, pol, cl, ks, cr] = await Promise.all([
       usersApi.get(id),
       profilesApi.list({ limit: 200 }),
       rulesApi.listPolicies({ limit: 200 }),
+      clisApi.list({ limit: 500 }),
       apiKeysApi.list({ limit: 200 }),
-      credentialsApi.list({ limit: 200 }),
+      credentialsApi.list({ limit: 500 }),
     ]);
     setUser(u);
     setProfiles(pf.data);
     setPolicies(pol.data);
+    setClis(cl.data);
     setKeys(ks.data.filter((k) => k.userId === id));
     setCreds(cr.data.filter((c) => c.userId === id));
     setAccessMode(u.policyId ? 'policy' : 'profile');
     idForm.setFieldsValue({ name: u.name, role: u.role, type: u.type, active: u.active });
+
+    const eid = computeEffectiveId(u, pf.data, pol.data);
+    setEffId(eid);
+    setRules(eid ? await rulesApi.listRules(eid) : []);
   };
   useEffect(() => {
     void load();
   }, [id]);
 
   const activePolicy = useMemo(() => policies.find((p) => p.active), [policies]);
-  const effective = useMemo(() => {
+  const effPolicy = useMemo(() => policies.find((p) => p.id === effId) ?? null, [policies, effId]);
+  const effSource: EffSource = useMemo(() => {
+    if (!user) return 'none';
+    if (user.policyId) return 'direct';
+    if (user.profileId && profiles.find((p) => p.id === user.profileId)?.policyId) return 'profile';
+    return activePolicy ? 'global' : 'none';
+  }, [user, profiles, activePolicy]);
+  const editable = effSource === 'direct';
+
+  const effLabel = useMemo(() => {
     if (!user) return '';
     if (user.policyId) return `direct → ${policies.find((p) => p.id === user.policyId)?.name ?? user.policyId}`;
     if (user.profileId) {
@@ -89,11 +128,67 @@ export function UserDetailPage() {
     await usersApi.update(id, { policyId: policyId || '', profileId: '' });
     void load();
   };
-  const createPolicyForUser = async () => {
-    const p = await rulesApi.createPolicy({ name: `user-${user.email}`, defaultEffect: 'deny', enforcement: 'warn' });
-    await usersApi.update(id, { policyId: p.id, profileId: '' });
-    message.success('Policy created and assigned');
-    navigate(`/policies/${p.id}`);
+
+  // Create a dedicated policy owned by this user, copying the CLIs + rules of
+  // whatever currently governs them (profile/global) so editing here never
+  // mutates a shared policy used by other users.
+  const customizeForUser = async () => {
+    const created = await rulesApi.createPolicy({
+      name: `user-${user.email}`,
+      description: `Dedicated policy for ${user.email}`,
+      defaultEffect: effPolicy?.defaultEffect ?? 'deny',
+      enforcement: effPolicy?.enforcement ?? 'warn',
+      clis: effPolicy?.clis ?? [],
+    });
+    for (const r of rules) {
+      await rulesApi.createRule(created.id, {
+        cli: r.cli, path: r.path, effect: r.effect, reason: r.reason, priority: r.priority,
+      });
+    }
+    await usersApi.update(id, { policyId: created.id, profileId: '' });
+    message.success('Dedicated policy created for this user — now editable below');
+    setAccessMode('policy');
+    void load();
+  };
+
+  const saveClis = async (next: string[]) => {
+    if (!effId) return;
+    await rulesApi.updatePolicy(effId, { clis: next });
+    message.success('CLIs updated');
+    void load();
+  };
+
+  const saveRule = async () => {
+    if (!effId) return;
+    const v = await ruleForm.validateFields();
+    if (ruleModal.editing) await rulesApi.updateRule(ruleModal.editing.id, v);
+    else await rulesApi.createRule(effId, v);
+    setRuleModal({ open: false });
+    void load();
+  };
+
+  // --- credentials (mode-aware, scoped to this user) ---
+  const credCliSlug = Form.useWatch('cli', credForm);
+  const credCli = useMemo(() => clis.find((c) => c.slug === credCliSlug), [clis, credCliSlug]);
+  const credMode: CliAuthMode = credCli?.auth?.mode ?? 'env';
+  const credStorable = credMode !== 'login-command' && credMode !== 'none';
+  const credCliOptions = useMemo(() => {
+    const governed = effPolicy?.clis ?? [];
+    const list = governed.length ? clis.filter((c) => governed.includes(c.slug)) : clis;
+    return list;
+  }, [clis, effPolicy]);
+
+  const submitCred = async () => {
+    const v = await credForm.validateFields();
+    const payload: { secret?: string; values?: Record<string, string>; content?: string } = {};
+    if (credMode === 'env' || credMode === 'flag') payload.secret = v.secret;
+    else if (credMode === 'env-multi') payload.values = v.values;
+    else if (credMode === 'file') payload.content = v.content;
+    await credentialsApi.store({ userId: id, cli: v.cli, payload });
+    message.success('Credential stored (encrypted at rest)');
+    setCredOpen(false);
+    credForm.resetFields();
+    void load();
   };
 
   const newKey = () => {
@@ -103,11 +198,7 @@ export function UserDetailPage() {
       content: <Input defaultValue={keyName} onChange={(e) => { keyName = e.target.value; }} />,
       onOk: async () => {
         const issued = await apiKeysApi.create({ name: keyName.trim(), userId: id });
-        modal.success({
-          title: 'API key issued — copy it now',
-          width: 560,
-          content: <CodeBlock value={issued.token} />,
-        });
+        modal.success({ title: 'API key issued — copy it now', width: 560, content: <CodeBlock value={issued.token} /> });
         void load();
       },
     });
@@ -171,21 +262,120 @@ export function UserDetailPage() {
             />
           </Form.Item>
         ) : (
-          <Space align="end">
-            <Form.Item label="Policy assigned directly" style={{ marginBottom: 0 }}>
-              <Select
-                allowClear
-                style={{ width: 360 }}
-                placeholder="Select a policy"
-                value={user.policyId}
-                onChange={(v) => setPolicy(v)}
-                options={policies.map((p) => ({ value: p.id, label: p.name }))}
-              />
-            </Form.Item>
-            <Button onClick={createPolicyForUser}>Create policy for this user</Button>
-          </Space>
+          <Form.Item label="Policy assigned directly" style={{ marginBottom: 0 }}>
+            <Select
+              allowClear
+              style={{ width: 360 }}
+              placeholder="Select a policy"
+              value={user.policyId}
+              onChange={(v) => setPolicy(v)}
+              options={policies.map((p) => ({ value: p.id, label: p.name }))}
+            />
+          </Form.Item>
         )}
-        <Alert style={{ marginTop: 16 }} type="info" showIcon message={<>Effective policy: <Text strong>{effective}</Text></>} />
+        <Alert style={{ marginTop: 16 }} type="info" showIcon message={<>Effective policy: <Text strong>{effLabel}</Text></>} />
+      </Card>
+
+      <Card
+        title="CLIs & rules"
+        style={{ marginBottom: 16 }}
+        extra={editable && (
+          <Button
+            icon={<PlusOutlined />}
+            disabled={!effId}
+            onClick={() => { ruleForm.resetFields(); ruleForm.setFieldsValue({ effect: 'deny', priority: 0 }); setRuleModal({ open: true }); }}
+          >
+            New rule
+          </Button>
+        )}
+      >
+        {!editable && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={effSource === 'none'
+              ? 'This user has no governing policy yet'
+              : `These CLIs & rules come from the ${effSource === 'profile' ? 'assigned profile' : 'global fallback'} and are shared`}
+            description={effSource === 'none'
+              ? 'Create a dedicated policy to define which CLIs this user can run and the rules that govern them.'
+              : 'Editing here would affect everyone using it. Create a dedicated policy for this user (the current CLIs and rules are copied) to customize it safely.'}
+            action={<Button size="small" onClick={customizeForUser}>Create dedicated policy for this user</Button>}
+          />
+        )}
+
+        <Form.Item label="CLIs this user can run" tooltip="The CLIs the wrapper installs/shims for this user" style={{ marginBottom: 16 }}>
+          <Select
+            mode="multiple"
+            allowClear
+            disabled={!editable || !effId}
+            placeholder={effId ? 'Select CLIs' : 'No policy'}
+            value={effPolicy?.clis ?? []}
+            onChange={(v: string[]) => void saveClis(v)}
+            options={clis.map((c) => ({ value: c.slug, label: `${c.name} (${c.slug})` }))}
+          />
+        </Form.Item>
+
+        <Table<Rule>
+          rowKey="id"
+          dataSource={rules}
+          pagination={false}
+          locale={{ emptyText: effId ? 'No rules' : 'No governing policy' }}
+          columns={[
+            { title: 'CLI', dataIndex: 'cli', render: (c) => <Text code>{c}</Text> },
+            { title: 'Path', dataIndex: 'path', render: (p) => <Text code>{p}</Text> },
+            { title: 'Effect', dataIndex: 'effect', render: (e) => <DecisionTag value={e} /> },
+            { title: 'Reason', dataIndex: 'reason' },
+            { title: 'Priority', dataIndex: 'priority' },
+            ...(editable ? [{
+              title: 'Actions',
+              render: (_: unknown, r: Rule) => (
+                <Space>
+                  <Button size="small" onClick={() => { ruleForm.setFieldsValue(r); setRuleModal({ open: true, editing: r }); }}>Edit</Button>
+                  <Popconfirm title="Delete rule?" onConfirm={async () => { await rulesApi.deleteRule(r.id); void load(); }}>
+                    <Button size="small" danger>Delete</Button>
+                  </Popconfirm>
+                </Space>
+              ),
+            }] : []),
+          ]}
+        />
+      </Card>
+
+      <Card
+        title="Credentials"
+        style={{ marginBottom: 16 }}
+        extra={(
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => { credForm.resetFields(); setCredOpen(true); }}
+          >
+            Store credential
+          </Button>
+        )}
+      >
+        <Paragraph type="secondary" style={{ marginTop: -8 }}>
+          Encrypted at rest (AES-256-GCM). Resolved as short-lived JIT tokens for the wrapper; never returned in plaintext.
+        </Paragraph>
+        <Table<CredentialEntry>
+          rowKey="id"
+          dataSource={creds}
+          pagination={false}
+          locale={{ emptyText: 'No stored credentials for this user' }}
+          columns={[
+            { title: 'CLI', dataIndex: 'cli', render: (c) => <Text code>{c}</Text> },
+            { title: 'Mode', dataIndex: 'mode', render: (m) => <Tag>{m}</Tag> },
+            { title: 'Target', render: (_, c) => c.envVar ?? c.flag ?? c.filePath ?? (c.envVars?.join(', ')) ?? '—' },
+            {
+              title: 'Actions',
+              render: (_, c) => (
+                <Popconfirm title="Delete credential?" onConfirm={async () => { await credentialsApi.remove(c.id); message.success('Deleted'); void load(); }}>
+                  <Button size="small" danger>Delete</Button>
+                </Popconfirm>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       <Card
@@ -214,7 +404,7 @@ export function UserDetailPage() {
         />
       </Card>
 
-      <Card title="Connect a device" style={{ marginBottom: 16 }}>
+      <Card title="Connect a device">
         <Paragraph type="secondary">Authenticate the CLI on a machine. Install: <Text code>brew install devic-cli-wrapper</Text></Paragraph>
         {user.type === 'service' ? (
           <>
@@ -234,19 +424,92 @@ export function UserDetailPage() {
         </Space>
       </Card>
 
-      <Card title="Credentials" extra={<Button size="small" onClick={() => navigate('/credentials')}>Manage in vault</Button>}>
-        <Table<CredentialEntry>
-          rowKey="id"
-          dataSource={creds}
-          pagination={false}
-          locale={{ emptyText: 'No stored credentials for this user' }}
-          columns={[
-            { title: 'CLI', dataIndex: 'cli', render: (c) => <Text code>{c}</Text> },
-            { title: 'Mode', dataIndex: 'mode', render: (m) => <Tag>{m}</Tag> },
-            { title: 'Target', render: (_, c) => c.envVar ?? c.flag ?? c.filePath ?? (c.envVars?.join(', ')) ?? '—' },
-          ]}
-        />
-      </Card>
+      <Modal
+        title={ruleModal.editing ? 'Edit rule' : 'New rule'}
+        open={ruleModal.open}
+        onCancel={() => setRuleModal({ open: false })}
+        onOk={saveRule}
+        destroyOnClose
+      >
+        <Form form={ruleForm} layout="vertical">
+          <Form.Item name="cli" label="CLI" rules={[{ required: true }]} tooltip="CLI slug, or * for any">
+            <Select
+              showSearch
+              options={[{ value: '*', label: '* (any CLI)' }, ...clis.map((c) => ({ value: c.slug, label: c.slug }))]}
+            />
+          </Form.Item>
+          <Form.Item name="path" label="Path" rules={[{ required: true }]} tooltip="Space-separated, wildcards * / ** (e.g. 'repo delete *')">
+            <Input placeholder="repo delete *" />
+          </Form.Item>
+          <Form.Item name="effect" label="Effect" rules={[{ required: true }]}>
+            <Select options={DECISIONS.map((d) => ({ value: d, label: d }))} />
+          </Form.Item>
+          <Form.Item name="reason" label="Reason"><Input /></Form.Item>
+          <Form.Item name="priority" label="Priority"><InputNumber min={0} /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Store credential"
+        open={credOpen}
+        onCancel={() => { setCredOpen(false); credForm.resetFields(); }}
+        onOk={submitCred}
+        okText="Store"
+        okButtonProps={{ disabled: !credStorable }}
+        destroyOnClose
+      >
+        <Form form={credForm} layout="vertical">
+          <Form.Item label="CLI" name="cli" rules={[{ required: true }]}>
+            <Select
+              showSearch
+              placeholder="Select a CLI"
+              optionFilterProp="label"
+              options={credCliOptions.map((c) => ({ value: c.slug, label: `${c.name} (${c.slug}) — ${c.auth?.mode ?? 'env'}` }))}
+            />
+          </Form.Item>
+          {!credCli ? (
+            <Alert type="info" showIcon message="Pick a CLI to see the credential shape it expects." />
+          ) : !credStorable ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={`${credCli.name} uses mode "${credMode}"`}
+              description={credMode === 'login-command'
+                ? `This CLI authenticates interactively. Run "${credCli.auth?.loginCommand ?? '<login command>'}" on the workstation — ShellPilot stores nothing.`
+                : 'This CLI manages its own credentials. ShellPilot stores nothing for it.'}
+            />
+          ) : credMode === 'env' || credMode === 'flag' ? (
+            <Form.Item
+              label={credMode === 'env'
+                ? `Secret (injected as ${credCli.auth?.envVar ?? '<env var>'})`
+                : `Secret (appended as ${credCli.auth?.flag ?? '<flag>'}=value)`}
+              name="secret"
+              rules={[{ required: true }]}
+              extra="Stored encrypted with AES-256-GCM. Never returned again."
+            >
+              <Input.Password autoComplete="new-password" />
+            </Form.Item>
+          ) : credMode === 'file' ? (
+            <Form.Item
+              label={`File content (written to ${credCli.auth?.filePath ?? '<path>'})`}
+              name="content"
+              rules={[{ required: true }]}
+              extra="Stored encrypted with AES-256-GCM. Never returned again."
+            >
+              <Input.TextArea rows={10} placeholder={credCli.auth?.fileFormat === 'json' ? '{ "type": "service_account", ... }' : ''} />
+            </Form.Item>
+          ) : credMode === 'env-multi' ? (
+            <>
+              <Alert type="info" showIcon message="One value per declared env var. All injected together at exec time." style={{ marginBottom: 12 }} />
+              {(credCli.auth?.envVars ?? []).map((envName) => (
+                <Form.Item key={envName} label={envName} name={['values', envName]} rules={[{ required: true }]}>
+                  <Input.Password autoComplete="new-password" />
+                </Form.Item>
+              ))}
+            </>
+          ) : null}
+        </Form>
+      </Modal>
     </div>
   );
 }
