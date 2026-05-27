@@ -1,6 +1,6 @@
 import { IsBoolean, IsEmail, IsEnum, IsMongoId, IsOptional, IsString, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserRole, USER_ROLES } from '../schema/user.schema';
+import { UserRole, USER_ROLES, UserType, USER_TYPES } from '../schema/user.schema';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'admin@shellpilot.local' })
@@ -20,6 +20,16 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(USER_ROLES)
   role?: UserRole;
+
+  @ApiPropertyOptional({ enum: USER_TYPES, default: 'human', description: "'service' for agents/automations" })
+  @IsOptional()
+  @IsEnum(USER_TYPES)
+  type?: UserType;
+
+  @ApiPropertyOptional({ description: 'Policy assigned directly to this user (takes precedence over the profile policy)' })
+  @IsOptional()
+  @IsMongoId()
+  policyId?: string;
 
   @ApiPropertyOptional({ description: 'Profile (department template) assigned to this user' })
   @IsOptional()

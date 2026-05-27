@@ -4,10 +4,16 @@ import { CONFIG } from '../../../config/config.loader';
 import { ShellpilotModuleConfig } from '../../../config/config.types';
 import { PoliciesRepository } from '../policies.repository';
 import { RulesRepository } from '../rules.repository';
+import { PolicyResolutionService } from '../policy-resolution.service';
 import { Decision, Enforcement, Policy } from '../schema/policy.schema';
 import { Rule } from '../schema/rule.schema';
 
-const POLICY_CACHE_KEY = 'shellpilot:policy:active';
+// Policy CONTENT is cached per policy id. Resolution (which id applies to a
+// given identity) is intentionally NOT cached — see PolicyResolutionService.
+// Consequence: activating a policy needs NO cache bust (content is unchanged;
+// only the fallback id changes, and that is resolved live). Only content edits
+// (updatePolicy / rule CRUD) invalidate a specific id.
+const POLICY_CACHE_PREFIX = 'shellpilot:policy:byId:';
 const POLICY_CACHE_TTL = 300;
 
 export interface EvaluationResult {
@@ -47,19 +53,22 @@ export class PolicyEvaluatorService {
   constructor(
     private readonly policies: PoliciesRepository,
     private readonly rulesRepo: RulesRepository,
+    private readonly resolution: PolicyResolutionService,
     private readonly redis: RedisService,
     @Inject(CONFIG) private readonly config: ShellpilotModuleConfig,
   ) {}
 
-  async invalidateCache(): Promise<void> {
-    await this.redis.del(POLICY_CACHE_KEY);
+  /** Bust the cached content of a single policy (call on policy/rule edits). */
+  async invalidatePolicy(policyId: string): Promise<void> {
+    await this.redis.del(POLICY_CACHE_PREFIX + policyId);
   }
 
-  private async loadActivePolicy(): Promise<CachedPolicy | null> {
-    const cached = await this.redis.get(POLICY_CACHE_KEY);
+  private async loadPolicyById(policyId: string): Promise<CachedPolicy | null> {
+    const key = POLICY_CACHE_PREFIX + policyId;
+    const cached = await this.redis.get(key);
     if (cached) return JSON.parse(cached) as CachedPolicy;
 
-    const policy = (await this.policies.findActive()) as (Policy & { _id: { toString(): string } }) | null;
+    const policy = (await this.policies.findById(policyId, {})) as (Policy & { _id: { toString(): string } }) | null;
     if (!policy) return null;
     const rules = (await this.rulesRepo.findByPolicy(String(policy._id))) as Array<Rule & { _id: { toString(): string } }>;
     const payload: CachedPolicy = {
@@ -77,8 +86,19 @@ export class PolicyEvaluatorService {
         priority: r.priority,
       })),
     };
-    await this.redis.setex(POLICY_CACHE_KEY, POLICY_CACHE_TTL, JSON.stringify(payload));
+    await this.redis.setex(key, POLICY_CACHE_TTL, JSON.stringify(payload));
     return payload;
+  }
+
+  /**
+   * Which policy applies: explicit override (admin/testing) → the user's
+   * effective policy (per-identity) → the globally-active policy.
+   */
+  private async resolvePolicyId(opts: { userId?: string; policyOverrideId?: string }): Promise<string | null> {
+    if (opts.policyOverrideId) return opts.policyOverrideId;
+    if (opts.userId) return this.resolution.resolveEffectivePolicyId(opts.userId);
+    const active = (await this.policies.findActive()) as (Policy & { _id: { toString(): string } }) | null;
+    return active ? String(active._id) : null;
   }
 
   private matchPath(rulePath: string, args: string[]): { matches: boolean; specificity: number } {
@@ -99,36 +119,13 @@ export class PolicyEvaluatorService {
     return { matches: true, specificity };
   }
 
-  async evaluate(cli: string, args: string[], policyOverrideId?: string): Promise<EvaluationResult> {
-    let cached: CachedPolicy | null;
-    if (policyOverrideId) {
-      const policy = (await this.policies.findById(policyOverrideId, {})) as (Policy & { _id: { toString(): string } }) | null;
-      if (!policy) {
-        return {
-          decision: this.config.shellpilot.defaultEnforcement === 'enforce' ? 'deny' : 'allow',
-          enforcement: this.config.shellpilot.defaultEnforcement,
-          policy: { id: '', name: 'no-policy', version: 0 },
-        };
-      }
-      const rules = (await this.rulesRepo.findByPolicy(String(policy._id))) as Array<Rule & { _id: { toString(): string } }>;
-      cached = {
-        id: String(policy._id),
-        name: policy.name,
-        version: policy.version,
-        defaultEffect: policy.defaultEffect,
-        enforcement: policy.enforcement,
-        rules: rules.map((r) => ({
-          id: String(r._id),
-          cli: r.cli,
-          path: r.path,
-          effect: r.effect,
-          reason: r.reason,
-          priority: r.priority,
-        })),
-      };
-    } else {
-      cached = await this.loadActivePolicy();
-    }
+  async evaluate(
+    cli: string,
+    args: string[],
+    opts: { userId?: string; policyOverrideId?: string } = {},
+  ): Promise<EvaluationResult> {
+    const policyId = await this.resolvePolicyId(opts);
+    const cached = policyId ? await this.loadPolicyById(policyId) : null;
 
     if (!cached) {
       return {

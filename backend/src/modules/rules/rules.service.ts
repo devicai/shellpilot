@@ -46,9 +46,10 @@ export class RulesService {
       } as Partial<Policy>,
       scope,
     )) as Policy & { _id: Types.ObjectId };
+    // Activation needs no cache bust: content is cached per id and a fresh
+    // policy isn't cached yet; the fallback id is resolved live.
     if (policy.active) {
       await this.policies.deactivateOthers(String(policy._id));
-      await this.evaluator.invalidateCache();
     }
     return policy;
   }
@@ -64,7 +65,8 @@ export class RulesService {
     if (updated.active) {
       await this.policies.deactivateOthers(String(updated._id));
     }
-    await this.evaluator.invalidateCache();
+    // Content (metadata/clis) changed → bust this policy's cached content.
+    await this.evaluator.invalidatePolicy(id);
     return updated;
   }
 
@@ -72,7 +74,8 @@ export class RulesService {
     const updated = (await this.policies.updateById(id, { active: true }, scope)) as (Policy & { _id: Types.ObjectId }) | null;
     if (!updated) throw new NotFoundException('Policy not found');
     await this.policies.deactivateOthers(String(updated._id));
-    await this.evaluator.invalidateCache();
+    // No cache bust: activation only changes which id is the fallback (resolved
+    // live); the policy's cached content is unchanged.
     return updated;
   }
 
@@ -80,7 +83,7 @@ export class RulesService {
     const ok = await this.policies.deleteById(id, scope);
     if (!ok) throw new NotFoundException('Policy not found');
     await this.rules.deleteByPolicy(id);
-    await this.evaluator.invalidateCache();
+    await this.evaluator.invalidatePolicy(id);
   }
 
   // ---- Rules ----
@@ -103,7 +106,7 @@ export class RulesService {
       } as Partial<Rule>,
       scope,
     );
-    await this.evaluator.invalidateCache();
+    await this.evaluator.invalidatePolicy(policyId);
     return rule;
   }
 
@@ -111,15 +114,17 @@ export class RulesService {
     const update: Partial<Rule> = { ...dto };
     if (dto.cli) update.cli = dto.cli.toLowerCase();
     if (dto.path) update.path = dto.path.trim();
-    const updated = await this.rules.updateById(id, update, scope);
+    const updated = (await this.rules.updateById(id, update, scope)) as (Rule & { policyId: Types.ObjectId }) | null;
     if (!updated) throw new NotFoundException('Rule not found');
-    await this.evaluator.invalidateCache();
+    await this.evaluator.invalidatePolicy(String(updated.policyId));
     return updated;
   }
 
   async deleteRule(id: string, scope: ExtensionScope): Promise<void> {
+    // Read the rule first so we know which policy's cache to bust.
+    const rule = (await this.rules.findById(id, scope)) as (Rule & { policyId: Types.ObjectId }) | null;
     const ok = await this.rules.deleteById(id, scope);
     if (!ok) throw new NotFoundException('Rule not found');
-    await this.evaluator.invalidateCache();
+    if (rule) await this.evaluator.invalidatePolicy(String(rule.policyId));
   }
 }

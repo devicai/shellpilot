@@ -22,7 +22,8 @@ export class TracesController {
   @Post()
   @ApiOperation({ summary: 'Ingest a trace event (consumed by the Go wrapper)' })
   ingest(@Body() dto: CreateTraceDto, @CurrentApiKey() apiKey?: AuthenticatedApiKey) {
-    return this.service.ingest(dto, apiKey?.prefix);
+    // Attribute the trace to the API key's identity, not a client-supplied id.
+    return this.service.ingest(dto, apiKey?.prefix, apiKey?.userId);
   }
 
   @ApiBearerAuth()

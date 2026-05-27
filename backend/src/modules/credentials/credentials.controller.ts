@@ -3,12 +3,13 @@ import { ApiBearerAuth, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagg
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentApiKey } from '../../common/decorators/current-api-key.decorator';
 import { Scope } from '../../common/decorators/scope.decorator';
 import { CredentialsService } from './credentials.service';
 import { StoreCredentialDto } from './dto/store-credential.dto';
 import { IssueCredentialDto } from './dto/issue-credential.dto';
 import { VerifyCredentialDto } from './dto/verify-credential.dto';
-import { AuthenticatedUser, ExtensionScope } from '../../interfaces';
+import { AuthenticatedApiKey, AuthenticatedUser, ExtensionScope } from '../../interfaces';
 
 @ApiTags('Credentials')
 @Controller('credentials')
@@ -51,9 +52,10 @@ export class CredentialsController {
   @ApiSecurity('x-api-key')
   @UseGuards(ApiKeyAuthGuard)
   @Post('issue')
-  @ApiOperation({ summary: 'Issue a JIT token bound to userId+cli (consumed by Go wrapper)' })
-  issue(@Body() dto: IssueCredentialDto) {
-    return this.service.issue(dto);
+  @ApiOperation({ summary: "Issue a JIT token bound to the API key's identity + cli (Go wrapper)" })
+  issue(@Body() dto: IssueCredentialDto, @CurrentApiKey() apiKey: AuthenticatedApiKey) {
+    // Identity comes from the key, never the body.
+    return this.service.issue({ ...dto, userId: apiKey.userId });
   }
 
   @ApiSecurity('x-api-key')

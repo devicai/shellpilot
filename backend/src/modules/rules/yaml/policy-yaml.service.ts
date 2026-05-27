@@ -4,29 +4,49 @@ import { Model } from 'mongoose';
 import * as yaml from 'js-yaml';
 import { PoliciesRepository } from '../policies.repository';
 import { RulesRepository } from '../rules.repository';
+import { PolicyResolutionService } from '../policy-resolution.service';
 import { Cli } from '../../clis-catalog/schema/cli.schema';
 import { Policy } from '../schema/policy.schema';
 import { Rule } from '../schema/rule.schema';
 
 /**
- * Compiles the active policy + matching CLI catalog entries into the YAML shape
- * the Go wrapper expects (see prototype/config.go — Config struct). The wrapper
- * fetches this once per cache TTL and evaluates everything locally.
+ * Compiles a policy + matching CLI catalog entries into the YAML shape the Go
+ * wrapper expects (see prototype/config.go — Config struct). The wrapper fetches
+ * this once per cache TTL and evaluates everything locally. Which policy a given
+ * API key gets is resolved per-user (PolicyResolutionService).
  */
 @Injectable()
 export class PolicyYamlService {
   constructor(
     private readonly policies: PoliciesRepository,
     private readonly rules: RulesRepository,
+    private readonly resolution: PolicyResolutionService,
     @InjectModel(Cli.name) private readonly cliModel: Model<Cli>,
   ) {}
 
+  /** Compile the effective policy for a user (direct → profile → global active). */
+  async compileEffectivePolicyYamlForUser(userId: string): Promise<string> {
+    const policyId = await this.resolution.resolveEffectivePolicyId(userId);
+    if (!policyId) {
+      throw new NotFoundException('No effective policy for this identity');
+    }
+    return this.compilePolicyYaml(policyId);
+  }
+
+  /** Compile the globally-active policy (no user context). */
   async compileActivePolicyYaml(): Promise<string> {
     const policy = (await this.policies.findActive()) as (Policy & { _id: { toString(): string } }) | null;
     if (!policy) {
       throw new NotFoundException('No active policy configured');
     }
-    const policyId = policy._id.toString();
+    return this.compilePolicyYaml(policy._id.toString());
+  }
+
+  async compilePolicyYaml(policyId: string): Promise<string> {
+    const policy = (await this.policies.findById(policyId, {})) as Policy | null;
+    if (!policy) {
+      throw new NotFoundException('Policy not found');
+    }
     const rules = await this.rules.findByPolicy(policyId);
     const clis = await this.loadCliCatalog(policy.clis ?? []);
 

@@ -55,6 +55,8 @@ export class UsersService implements OnModuleInit {
         passwordHash,
         name: dto.name,
         role: dto.role ?? 'viewer',
+        type: dto.type ?? 'human',
+        policyId: dto.policyId ? new Types.ObjectId(dto.policyId) : undefined,
         profileId: dto.profileId ? new Types.ObjectId(dto.profileId) : undefined,
         active: dto.active ?? true,
       },
@@ -77,12 +79,22 @@ export class UsersService implements OnModuleInit {
   }
 
   async update(id: string, dto: UpdateUserDto, scope: ExtensionScope): Promise<User> {
-    const patch: Partial<User> & { profileId?: Types.ObjectId | null } = { ...dto } as never;
+    const patch: Partial<User> & {
+      profileId?: Types.ObjectId | null;
+      policyId?: Types.ObjectId | null;
+    } = { ...dto } as never;
+    // Allow clearing via empty string from the UI as well as null. Mongoose
+    // treats `null` as a $set null, which clears the field. Profile and direct
+    // policy are mutually exclusive in the UI but the backend tolerates both
+    // (direct policy wins in resolution).
     if (dto.profileId !== undefined) {
-      // Allow clearing via empty string from the UI ("no profile") as well as
-      // null. Mongoose treats `null` as a $set null, which clears the field.
       patch.profileId = dto.profileId
         ? new Types.ObjectId(dto.profileId)
+        : (null as unknown as Types.ObjectId);
+    }
+    if (dto.policyId !== undefined) {
+      patch.policyId = dto.policyId
+        ? new Types.ObjectId(dto.policyId)
         : (null as unknown as Types.ObjectId);
     }
     const user = await this.repo.updateById(id, patch as Partial<User>, scope);

@@ -163,12 +163,17 @@ export class CredentialsService {
   }
 
   async issue(dto: IssueCredentialDto): Promise<{ jitToken: string; expiresIn: number }> {
+    // Identity is set by the controller from the authenticated API key.
+    const userId = dto.userId;
+    if (!userId) {
+      throw new BadRequestException('Missing identity (no API key user)');
+    }
     // Profile gate: if the user has a profile assigned and it whitelists CLIs,
     // refuse early when the requested cli isn't in the list. Department
     // boundaries: a marketing user shouldn't be able to issue gcloud creds
     // even if a vault entry exists for them. The wrapper turns this into a
     // policy-deny equivalent at the call site.
-    const user = (await this.users.findById(dto.userId, {})) as
+    const user = (await this.users.findById(userId, {})) as
       | { profileId?: { toString(): string } }
       | null;
     if (user?.profileId) {
@@ -183,10 +188,10 @@ export class CredentialsService {
       }
     }
 
-    const entry = await this.repo.findForUserAndCli(dto.userId, dto.cli);
+    const entry = await this.repo.findForUserAndCli(userId, dto.cli);
     if (!entry) {
       throw new NotFoundException(
-        `No credential stored for user ${dto.userId} and CLI ${dto.cli}`,
+        `No credential stored for user ${userId} and CLI ${dto.cli}`,
       );
     }
     const envelope = JSON.parse(
@@ -205,7 +210,7 @@ export class CredentialsService {
     const auth = cli.auth ?? { mode: entry.mode };
 
     const issued = await this.jit.issue({
-      userId: dto.userId,
+      userId,
       cli: dto.cli,
       mode: auth.mode ?? entry.mode,
       envVar: auth.envVar ?? entry.envVar,

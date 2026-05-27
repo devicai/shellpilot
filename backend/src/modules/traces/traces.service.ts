@@ -34,7 +34,10 @@ export class TracesService {
     });
   }
 
-  async ingest(dto: CreateTraceDto, apiKeyPrefix?: string): Promise<Trace> {
+  async ingest(dto: CreateTraceDto, apiKeyPrefix?: string, apiKeyUserId?: string): Promise<Trace> {
+    // Prefer the authenticated API key's identity; fall back to a body-supplied
+    // userId for back-compat / non-wrapper callers.
+    const ownerId = apiKeyUserId ?? dto.userId;
     const trace = await this.repo.create(
       {
         cli: dto.cli.toLowerCase(),
@@ -45,7 +48,7 @@ export class TracesService {
         matchedRuleId: dto.matchedRuleId ? new Types.ObjectId(dto.matchedRuleId) : undefined,
         matchedRulePath: dto.matchedRulePath,
         reason: dto.reason,
-        userId: dto.userId ? new Types.ObjectId(dto.userId) : undefined,
+        userId: ownerId ? new Types.ObjectId(ownerId) : undefined,
         apiKeyPrefix,
         agent: dto.agent,
         durationMs: dto.durationMs,

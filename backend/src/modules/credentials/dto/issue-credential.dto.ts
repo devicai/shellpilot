@@ -2,9 +2,12 @@ import { IsArray, IsMongoId, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class IssueCredentialDto {
-  @ApiProperty({ description: 'User owning the credential' })
+  @ApiPropertyOptional({
+    description: 'Ignored from the wrapper — identity is derived from the API key. Kept for back-compat.',
+  })
+  @IsOptional()
   @IsMongoId()
-  userId!: string;
+  userId?: string;
 
   @ApiProperty({ example: 'gh' })
   @IsString()
