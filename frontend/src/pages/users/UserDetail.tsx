@@ -97,8 +97,10 @@ export function UserDetailPage() {
     }
     setEffPolicy(ep);
     setRules(rs);
+    // Default to Individual rules (user-first): only land on profile/direct
+    // when the user is actually configured that way.
     const individual = !!ep && String(ep.ownerUserId ?? '') === u.id;
-    setAccessMode(individual ? 'individual' : u.policyId ? 'policy' : 'profile');
+    setAccessMode(individual ? 'individual' : u.profileId ? 'profile' : u.policyId ? 'policy' : 'individual');
   };
   useEffect(() => {
     void load();

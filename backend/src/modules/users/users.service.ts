@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { ConflictException, forwardRef, Inject, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { CONFIG } from '../../config/config.loader';
@@ -8,6 +8,7 @@ import { UsersRepository } from './users.repository';
 import { User } from './schema/user.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { RulesService } from '../rules/rules.service';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -18,6 +19,7 @@ export class UsersService implements OnModuleInit {
   constructor(
     private readonly repo: UsersRepository,
     @Inject(CONFIG) private readonly config: ShellpilotModuleConfig,
+    @Inject(forwardRef(() => RulesService)) private readonly rules: RulesService,
   ) {}
 
   async onModuleInit() {
@@ -49,7 +51,7 @@ export class UsersService implements OnModuleInit {
       throw new ConflictException(`User with email ${dto.email} already exists`);
     }
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    return this.repo.create(
+    const created = await this.repo.create(
       {
         email: dto.email.toLowerCase(),
         passwordHash,
@@ -62,6 +64,26 @@ export class UsersService implements OnModuleInit {
       },
       scope,
     );
+
+    // User-first default: a user created without a profile (and without a
+    // directly-assigned policy) gets their own individual, owner-scoped rules
+    // straight away, ready to configure CLIs & rules. Picking a profile opts
+    // out — the profile carries the policy instead.
+    if (!dto.profileId && !dto.policyId) {
+      const userId = String((created as unknown as { _id: Types.ObjectId })._id);
+      const policy = await this.rules.createPolicy(
+        {
+          name: `Individual rules — ${created.email}`,
+          description: `Private CLIs & rules for ${created.email}`,
+          ownerUserId: userId,
+        },
+        scope,
+      );
+      const policyId = String((policy as unknown as { _id: Types.ObjectId })._id);
+      const updated = await this.repo.updateById(userId, { policyId: new Types.ObjectId(policyId) }, scope);
+      if (updated) return updated;
+    }
+    return created;
   }
 
   async list(scope: ExtensionScope, opts: { limit?: number; offset?: number }): Promise<PaginatedResponse<User>> {
