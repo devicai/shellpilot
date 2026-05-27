@@ -1,0 +1,15 @@
+slug: vercel
+name: Vercel CLI
+version: 2
+vendor: Vercel
+description: Deploy and manage Vercel projects from the command line.
+docsUrl: https://vercel.com/docs/cli
+iconUrl: https://cdn.simpleicons.org/vercel
+defaultEnforcement: warn
+auth:
+  mode: env
+  envVar: VERCEL_TOKEN
+installCommands:
+  mac: npm i -g vercel
+  linux: npm i -g vercel
+  windows: npm i -g vercel

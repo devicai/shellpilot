@@ -10,6 +10,8 @@ import { ExtensionScope } from '../../interfaces';
 import { RulesService } from './rules.service';
 import { PolicyEvaluatorService } from './evaluator/policy-evaluator.service';
 import { PolicyYamlService } from './yaml/policy-yaml.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
+import { WebhookEvent } from './schema/policy.schema';
 import { CreatePolicyDto } from './dto/create-policy.dto';
 import { UpdatePolicyDto } from './dto/update-policy.dto';
 import { CreateRuleDto } from './dto/create-rule.dto';
@@ -23,6 +25,7 @@ export class RulesController {
     private readonly service: RulesService,
     private readonly evaluator: PolicyEvaluatorService,
     private readonly yamlCompiler: PolicyYamlService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   // --- Active policy as YAML (consumed by the Go wrapper) ---
@@ -97,6 +100,17 @@ export class RulesController {
   async deletePolicy(@Param('id') id: string, @Scope() scope: ExtensionScope) {
     await this.service.deletePolicy(id, scope);
     return { status: 'ok' };
+  }
+
+  // --- Webhook test ---
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'operator')
+  @Post('policies/:id/webhooks/:event/test')
+  @ApiOperation({ summary: 'Send a test ping to a configured webhook URL' })
+  testWebhook(@Param('id') id: string, @Param('event') event: string) {
+    return this.webhooks.testEvent(id, event as WebhookEvent);
   }
 
   // --- Rules ---

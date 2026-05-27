@@ -1,0 +1,40 @@
+slug: gcloud
+name: Google Cloud CLI
+version: 1
+vendor: Google
+description: Manage Google Cloud resources and services.
+docsUrl: https://cloud.google.com/sdk/gcloud
+iconUrl: https://cdn.simpleicons.org/googlecloud
+defaultEnforcement: warn
+auth:
+  mode: file
+  fileFormat: json
+  filePath:
+    mac: ~/.config/gcloud/application_default_credentials.json
+    linux: ~/.config/gcloud/application_default_credentials.json
+    windows: '%APPDATA%\gcloud\application_default_credentials.json'
+  # Server-side: exchange the stored OAuth refresh token for a short-lived
+  # access token at verify time.
+  postProcess:
+    - kind: http-form-post
+      url: https://oauth2.googleapis.com/token
+      form:
+        grant_type: refresh_token
+        refresh_token: $vault.refreshToken
+        client_id: $vault.clientId
+        client_secret: $vault.clientSecret
+      saveAs: token
+  # Client-side: materialise the ADC file the gcloud SDK reads.
+  delivery:
+    - kind: file
+      path: $auth.filePath
+      format: json
+      content:
+        type: authorized_user
+        client_id: $vault.clientId
+        client_secret: $vault.clientSecret
+        refresh_token: $vault.refreshToken
+installCommands:
+  mac: brew install --cask google-cloud-sdk
+  linux: curl https://sdk.cloud.google.com | bash
+  windows: winget install Google.CloudSDK

@@ -5,6 +5,19 @@ import { BaseRepository } from '../../repositories/base.repository';
 import { EXTENSIONS_TOKEN } from '../../providers/extensions.provider';
 import { ExtensionProperty } from '../../config/config.types';
 import { VaultEntry } from './schema/vault-entry.schema';
+import { CliAuthMode, OsPath } from '../clis-catalog/schema/cli.schema';
+
+export interface UpsertVaultFields {
+  mode: CliAuthMode;
+  envVar?: string;
+  envVars?: string[];
+  filePath?: OsPath;
+  fileFormat?: string;
+  flag?: string;
+  envelopeCiphertext: string;
+  envelopeIv: string;
+  envelopeTag: string;
+}
 
 @Injectable()
 export class CredentialsRepository extends BaseRepository<VaultEntry> {
@@ -24,15 +37,12 @@ export class CredentialsRepository extends BaseRepository<VaultEntry> {
   async upsertForUserAndCli(
     userId: string,
     cli: string,
-    envVar: string,
-    secretCiphertext: string,
-    secretIv: string,
-    secretTag: string,
+    fields: UpsertVaultFields,
   ): Promise<VaultEntry> {
     return (await this.model
       .findOneAndUpdate(
-        { userId: new Types.ObjectId(userId), cli: cli.toLowerCase(), envVar },
-        { secretCiphertext, secretIv, secretTag },
+        { userId: new Types.ObjectId(userId), cli: cli.toLowerCase() },
+        fields,
         { new: true, upsert: true, setDefaultsOnInsert: true },
       )
       .exec()) as VaultEntry;

@@ -3,14 +3,31 @@ import { randomBytes } from 'crypto';
 import { RedisService } from '../../../redis/redis.service';
 import { CONFIG } from '../../../config/config.loader';
 import { ShellpilotModuleConfig } from '../../../config/config.types';
+import { CliAuthMode, OsPath } from '../../clis-catalog/schema/cli.schema';
 
 const PREFIX = 'shellpilot:jit:';
+
+export interface VaultEnvelope {
+  secret?: string;
+  values?: Record<string, string>;
+  content?: string;
+}
 
 export interface JitPayload {
   userId: string;
   cli: string;
-  envVar: string;
-  secret: string;
+  mode: CliAuthMode;
+  envVar?: string;
+  envVars?: string[];
+  filePath?: OsPath;
+  fileFormat?: string;
+  flag?: string;
+  envelope: VaultEnvelope;
+  // Snapshot of the catalog's declarative auth config at issue time.
+  // Run server-side at verify (postProcess) and applied client-side by the
+  // wrapper (delivery).
+  postProcess?: Array<Record<string, unknown>>;
+  delivery?: Array<Record<string, unknown>>;
   commandPath?: string[];
   issuedAt: number;
 }

@@ -79,12 +79,22 @@ export class PolicyYamlService {
           linux: '',
           windows: '',
         },
-        auth: c.envVarHint
-          ? { mode: 'env', env_var: c.envVarHint }
-          : { mode: '', env_var: '' },
+        auth: this.encodeAuthYaml(c.auth),
         docs: c.docsUrl ?? '',
       };
     }
+    return out;
+  }
+
+  private encodeAuthYaml(auth?: Cli['auth']): Record<string, unknown> {
+    if (!auth || !auth.mode || auth.mode === 'none') return { mode: '', env_var: '' };
+    const out: Record<string, unknown> = { mode: auth.mode };
+    if (auth.envVar) out.env_var = auth.envVar;
+    if (auth.envVars && auth.envVars.length) out.env_vars = auth.envVars;
+    if (auth.filePath) out.file_path = auth.filePath;
+    if (auth.fileFormat) out.file_format = auth.fileFormat;
+    if (auth.flag) out.flag = auth.flag;
+    if (auth.loginCommand) out.login_command = auth.loginCommand;
     return out;
   }
 

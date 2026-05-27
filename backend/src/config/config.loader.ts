@@ -62,6 +62,14 @@ export function loadConfig(configPath?: string): ShellpilotModuleConfig {
     defaultEnforcement: 'warn',
     redactPatterns: [],
   };
+  resolved.catalog = {
+    source: resolved.catalog?.source ?? 'github',
+    repo: resolved.catalog?.repo ?? 'devicai/shellpilot',
+    ref: resolved.catalog?.ref ?? 'main',
+    path: resolved.catalog?.path ?? 'catalog',
+    token: resolved.catalog?.token || undefined,
+    cacheTtlSeconds: resolved.catalog?.cacheTtlSeconds ?? 300,
+  };
 
   return resolved;
 }

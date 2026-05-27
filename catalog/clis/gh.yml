@@ -1,0 +1,15 @@
+slug: gh
+name: GitHub CLI
+version: 1
+vendor: GitHub
+description: GitHub from the command line — repos, PRs, issues, releases.
+docsUrl: https://cli.github.com/manual/
+iconUrl: https://cdn.simpleicons.org/github
+defaultEnforcement: warn
+auth:
+  mode: env
+  envVar: GH_TOKEN
+installCommands:
+  mac: brew install gh
+  linux: sudo apt install gh
+  windows: winget install GitHub.cli

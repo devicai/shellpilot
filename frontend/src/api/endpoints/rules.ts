@@ -1,13 +1,22 @@
 import { apiClient } from '../client';
 import type { Decision, Enforcement, EvaluationResult, Paginated, Policy, Rule } from '../../types/api';
 
+export const WEBHOOK_EVENTS = [
+  'on_deny',
+  'on_requires_approval',
+  'on_jit_issued',
+  'on_binary_missing',
+] as const;
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
 export interface CreatePolicyPayload {
   name: string;
   description?: string;
   defaultEffect?: Decision;
   enforcement?: Enforcement;
   clis?: string[];
-  webhooks?: Record<string, string>;
+  webhooks?: Partial<Record<WebhookEvent, string>>;
+  webhookSecret?: string;
   active?: boolean;
 }
 
@@ -46,5 +55,12 @@ export const rulesApi = {
   evaluate: (cli: string, args: string[], policyId?: string) =>
     apiClient
       .post<EvaluationResult>('/rules/evaluate', { cli, args, policyId })
+      .then((r) => r.data),
+
+  testWebhook: (policyId: string, event: WebhookEvent) =>
+    apiClient
+      .post<{ status: number; body: string }>(
+        `/rules/policies/${policyId}/webhooks/${event}/test`,
+      )
       .then((r) => r.data),
 };

@@ -71,3 +71,19 @@ shellpilot:
     - "--token=*"
     - "--password=*"
     - "--api-key=*"
+
+# --- Public CLI catalog registry ---
+# The official catalog (index.yml + clis/<slug>.yml) lives in a Git repo. The
+# backend fetches it over HTTP (never clones the source). ref=main so catalog
+# updates flow without redeploying the backend; each imported entry is pinned in
+# the DB to the version/sha it was imported at (updates are opt-in via the UI).
+catalog:
+  # github | local
+  source: ${CATALOG_SOURCE:-github}
+  # github: owner/repo   |   local: a directory path on disk
+  repo: ${CATALOG_REPO:-devicai/shellpilot}
+  ref: ${CATALOG_REF:-main}
+  path: ${CATALOG_PATH:-catalog}
+  # read-only token while the repo is private; empty once it's public.
+  token: ${CATALOG_TOKEN:-}
+  cacheTtlSeconds: ${CATALOG_CACHE_TTL:-300}

@@ -9,7 +9,6 @@ import {
   Spin,
   Statistic,
   Table,
-  Tag,
   Typography,
 } from 'antd';
 import {
@@ -24,6 +23,7 @@ import {
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
+import { DecisionTag } from '../components/PolicyTags';
 import { tracesApi } from '../api/endpoints/traces';
 import { usersApi } from '../api/endpoints/users';
 import { clisApi } from '../api/endpoints/clis';
@@ -40,9 +40,6 @@ import { CliLogo } from './clis/ClisList';
 const { Text } = Typography;
 
 const WRAPPER_CLIS = ['devic-cli-wrapper', 'devic-wrapper'];
-
-const decisionColor = (d: Decision) =>
-  d === 'allow' ? 'green' : d === 'deny' ? 'red' : 'gold';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -247,7 +244,7 @@ export function DashboardPage() {
                 title: 'Decision',
                 dataIndex: 'decision',
                 width: 120,
-                render: (v) => <Tag color={decisionColor(v as Decision)}>{v}</Tag>,
+                render: (v) => <DecisionTag value={v as Decision} />,
               },
               {
                 title: 'User',

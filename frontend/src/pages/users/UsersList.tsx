@@ -3,7 +3,8 @@ import { Button, Modal, Form, Input, Select, Table, Tag, Space, Popconfirm, App 
 import dayjs from 'dayjs';
 import { PageHeader } from '../../components/PageHeader';
 import { usersApi, type CreateUserPayload } from '../../api/endpoints/users';
-import type { User, UserRole } from '../../types/api';
+import { profilesApi } from '../../api/endpoints/profiles';
+import type { Profile, User, UserRole } from '../../types/api';
 
 const { Text } = Typography;
 
@@ -22,12 +23,17 @@ export function UsersListPage() {
   const [pwdOpen, setPwdOpen] = useState<User | null>(null);
   const [form] = Form.useForm<CreateUserPayload>();
   const [pwdForm] = Form.useForm<{ newPassword: string }>();
+  const [profiles, setProfiles] = useState<Profile[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await usersApi.list({ limit: 100 });
+      const [res, profRes] = await Promise.all([
+        usersApi.list({ limit: 100 }),
+        profilesApi.list({ limit: 100 }),
+      ]);
       setData(res.data);
+      setProfiles(profRes.data);
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       message.error(err.response?.data?.message ?? 'Failed to load users');
@@ -48,6 +54,7 @@ export function UsersListPage() {
           email: values.email,
           name: values.name,
           role: values.role,
+          profileId: values.profileId,
           active: values.active,
         });
         message.success('User updated');
@@ -114,6 +121,15 @@ export function UsersListPage() {
             ),
           },
           {
+            title: 'Profile',
+            dataIndex: 'profileId',
+            render: (v?: string) => {
+              const p = v ? profiles.find((x) => x.id === v) : null;
+              if (!p) return <Text type="secondary">—</Text>;
+              return <Tag color="geekblue">{p.name}</Tag>;
+            },
+          },
+          {
             title: 'Active',
             dataIndex: 'active',
             render: (v) => (v ? <Tag color="green">yes</Tag> : <Tag>no</Tag>),
@@ -142,6 +158,7 @@ export function UsersListPage() {
                       email: r.email,
                       name: r.name,
                       role: r.role,
+                      profileId: r.profileId,
                       active: r.active,
                       password: '',
                     });
@@ -197,6 +214,17 @@ export function UsersListPage() {
           )}
           <Form.Item label="Role" name="role" initialValue="viewer">
             <Select options={ROLE_OPTS} />
+          </Form.Item>
+          <Form.Item
+            label="Profile"
+            name="profileId"
+            tooltip="Scopes the user's allowed CLIs via a department template. Leave empty for no profile gating."
+          >
+            <Select
+              allowClear
+              placeholder="(no profile)"
+              options={profiles.map((p) => ({ value: p.id, label: p.name }))}
+            />
           </Form.Item>
           <Form.Item label="Active" name="active" valuePropName="checked" initialValue={true}>
             <Switch />
