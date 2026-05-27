@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'operator' | 'viewer';
+export type UserType = 'human' | 'service';
 
 export interface AuthenticatedUser {
   id: string;
@@ -23,6 +24,8 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  type: UserType;
+  policyId?: string;
   profileId?: string;
   active: boolean;
   lastLoginAt?: string;

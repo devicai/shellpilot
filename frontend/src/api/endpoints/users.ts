@@ -1,11 +1,13 @@
 import { apiClient } from '../client';
-import type { Paginated, User, UserRole } from '../../types/api';
+import type { Paginated, User, UserRole, UserType } from '../../types/api';
 
 export interface CreateUserPayload {
   email: string;
   password: string;
   name: string;
   role?: UserRole;
+  type?: UserType;
+  policyId?: string;
   profileId?: string;
   active?: boolean;
 }
@@ -14,6 +16,8 @@ export interface UpdateUserPayload {
   email?: string;
   name?: string;
   role?: UserRole;
+  type?: UserType;
+  policyId?: string;
   profileId?: string;
   active?: boolean;
 }

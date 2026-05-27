@@ -9,6 +9,7 @@ import {
   faGear,
   faSitemap,
   faStore,
+  faScroll,
 } from '@fortawesome/free-solid-svg-icons';
 
 export interface ModuleSubSection {
@@ -26,18 +27,18 @@ export interface ModuleConfig {
   sections: ModuleSubSection[];
 }
 
-// Rules and API Keys intentionally absent from the sidebar:
-//   - Rules now live inside each CLI detail page (rules are always bound to a
-//     CLI, so editing them separately was extra navigation for no benefit).
-//   - API Keys collapsed to a single key per instance, managed from Settings.
+// User/service-account-first IA: identities are the entry point; Policies are a
+// first-class top-level section (the policy detail hosts the CLIs multiselect +
+// the full rules table); API keys + credentials are managed per user.
 export const MODULE_CONFIG: ModuleConfig = {
   name: 'ShellPilot',
   icon: faShield,
   basePath: '/dashboard',
   sections: [
     { key: 'dashboard', label: 'Dashboard', icon: faGaugeHigh, path: '/dashboard' },
-    { key: 'users', label: 'Users', icon: faUsers, path: '/users' },
+    { key: 'users', label: 'Users & Service Accounts', icon: faUsers, path: '/users' },
     { key: 'profiles', label: 'Profiles', icon: faSitemap, path: '/profiles' },
+    { key: 'policies', label: 'Policies', icon: faScroll, path: '/policies' },
     { key: 'clis', label: 'CLIs Catalog', icon: faTerminal, path: '/clis' },
     { key: 'catalog', label: 'Catalog Registry', icon: faStore, path: '/catalog' },
     { key: 'credentials', label: 'Credentials', icon: faVault, path: '/credentials' },
