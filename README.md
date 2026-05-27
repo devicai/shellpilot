@@ -168,6 +168,13 @@ After enabling, every request must include `x-client-uid: <tenant>`. `BaseReposi
   (CLI, user, the triggering command path). Right now only `/verify` activity
   shows up because `/issue` is upstream of the wrapper's exec step.
 
+## Distributing the wrapper
+
+The `devic-cli-wrapper` Go binary ships via a public Homebrew tap
+(`brew tap devicai/tap && brew install devic-cli-wrapper`). See
+[docs/homebrew-distribution.md](docs/homebrew-distribution.md) for the layout,
+the rationale (why unsigned is fine for brew), and how to cut a new version.
+
 ## License
 
 Apache 2.0
