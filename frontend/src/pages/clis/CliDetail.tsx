@@ -7,7 +7,6 @@ import {
   Col,
   Form,
   Input,
-  Modal,
   Popconfirm,
   Row,
   Select,
@@ -19,13 +18,13 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { PageHeader } from '../../components/PageHeader';
 import { DecisionTag } from '../../components/PolicyTags';
 import { CliAuthFields } from '../../components/CliAuthFields';
 import { clisApi, type UpdateCliPayload } from '../../api/endpoints/clis';
-import { rulesApi, type CreateRulePayload } from '../../api/endpoints/rules';
+import { rulesApi } from '../../api/endpoints/rules';
 import type { CliCatalogItem, Decision, Policy, Rule } from '../../types/api';
 import { CliLogo } from './ClisList';
 
@@ -35,12 +34,6 @@ const ENFORCEMENT_OPTS = [
   { value: 'enforce', label: 'Enforce' },
   { value: 'warn', label: 'Warn' },
   { value: 'audit', label: 'Audit' },
-];
-
-const DECISION_OPTS: { value: Decision; label: string }[] = [
-  { value: 'allow', label: 'allow' },
-  { value: 'deny', label: 'deny' },
-  { value: 'requires-approval', label: 'requires-approval' },
 ];
 
 export function CliDetailPage() {
@@ -55,10 +48,6 @@ export function CliDetailPage() {
   const [activePolicy, setActivePolicy] = useState<Policy | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
-
-  const [ruleModalOpen, setRuleModalOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<Rule | null>(null);
-  const [ruleForm] = Form.useForm<CreateRulePayload>();
 
   const cliRules = useMemo(
     () => rules.filter((r) => r.cli === slug || r.cli === '*'),
@@ -139,61 +128,6 @@ export function CliDetailPage() {
       await clisApi.remove(cli.id);
       message.success('CLI deleted');
       navigate('/clis');
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } } };
-      message.error(err.response?.data?.message ?? 'Delete failed');
-    }
-  };
-
-  const openNewRule = () => {
-    setEditingRule(null);
-    ruleForm.resetFields();
-    ruleForm.setFieldsValue({ cli: slug, effect: 'deny', priority: 0 });
-    setRuleModalOpen(true);
-  };
-
-  const openEditRule = (r: Rule) => {
-    setEditingRule(r);
-    ruleForm.setFieldsValue({
-      cli: r.cli,
-      path: r.path,
-      effect: r.effect,
-      reason: r.reason,
-      priority: r.priority,
-    });
-    setRuleModalOpen(true);
-  };
-
-  const onSubmitRule = async () => {
-    if (!activePolicy) {
-      message.error('No active policy. Create one in Settings first.');
-      return;
-    }
-    try {
-      const values = await ruleForm.validateFields();
-      if (editingRule) {
-        await rulesApi.updateRule(editingRule.id, values);
-        message.success('Rule updated');
-      } else {
-        await rulesApi.createRule(activePolicy.id, values);
-        message.success('Rule created');
-      }
-      setRuleModalOpen(false);
-      setEditingRule(null);
-      ruleForm.resetFields();
-      await loadActivePolicyAndRules();
-    } catch (e: unknown) {
-      if ((e as { errorFields?: unknown }).errorFields) return;
-      const err = e as { response?: { data?: { message?: string } } };
-      message.error(err.response?.data?.message ?? 'Operation failed');
-    }
-  };
-
-  const onDeleteRule = async (r: Rule) => {
-    try {
-      await rulesApi.deleteRule(r.id);
-      message.success('Rule deleted');
-      await loadActivePolicyAndRules();
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } };
       message.error(err.response?.data?.message ?? 'Delete failed');
@@ -320,108 +254,59 @@ export function CliDetailPage() {
         }
         size="small"
         extra={
-          <Button type="primary" size="small" onClick={openNewRule} disabled={!activePolicy}>
-            New rule
-          </Button>
+          activePolicy && (
+            <Link to={`/policies/${activePolicy.id}`}>Edit in Policies →</Link>
+          )
         }
       >
         {!activePolicy ? (
           <Alert
-            type="warning"
+            type="info"
             showIcon
             message="No active policy"
-            description="Create and activate a policy from Settings before adding rules."
+            description={<>Rules are managed per policy. Go to <Link to="/policies">Policies</Link> to create one.</>}
           />
         ) : (
-          <Table<Rule>
-            size="small"
-            rowKey="id"
-            loading={rulesLoading}
-            pagination={false}
-            dataSource={cliRules}
-            locale={{ emptyText: 'No rules for this CLI yet' }}
-            columns={[
-              {
-                title: 'Path',
-                dataIndex: 'path',
-                render: (v, r) => (
-                  <Space size={4}>
-                    {r.cli === '*' && <Tag>any CLI</Tag>}
-                    <Text className="shellpilot-mono" style={{ fontSize: 12 }}>
-                      {v}
-                    </Text>
-                  </Space>
-                ),
-              },
-              {
-                title: 'Effect',
-                dataIndex: 'effect',
-                width: 140,
-                render: (v: Decision) => <DecisionTag value={v} />,
-              },
-              { title: 'Reason', dataIndex: 'reason', ellipsis: true },
-              { title: 'Priority', dataIndex: 'priority', width: 80 },
-              {
-                title: '',
-                width: 130,
-                render: (_, r) => (
-                  <Space>
-                    <Button type="link" size="small" onClick={() => openEditRule(r)}>
-                      Edit
-                    </Button>
-                    <Popconfirm title="Delete rule?" onConfirm={() => onDeleteRule(r)}>
-                      <Button type="link" size="small" danger>
-                        Delete
-                      </Button>
-                    </Popconfirm>
-                  </Space>
-                ),
-              },
-            ]}
-          />
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={<>Read-only view of rules touching <Text code>{slug}</Text> in the active policy. Edit them in <Link to={`/policies/${activePolicy.id}`}>Policies</Link>.</>}
+            />
+            <Table<Rule>
+              size="small"
+              rowKey="id"
+              loading={rulesLoading}
+              pagination={false}
+              dataSource={cliRules}
+              locale={{ emptyText: 'No rules for this CLI yet' }}
+              columns={[
+                {
+                  title: 'Path',
+                  dataIndex: 'path',
+                  render: (v, r) => (
+                    <Space size={4}>
+                      {r.cli === '*' && <Tag>any CLI</Tag>}
+                      <Text className="shellpilot-mono" style={{ fontSize: 12 }}>
+                        {v}
+                      </Text>
+                    </Space>
+                  ),
+                },
+                {
+                  title: 'Effect',
+                  dataIndex: 'effect',
+                  width: 140,
+                  render: (v: Decision) => <DecisionTag value={v} />,
+                },
+                { title: 'Reason', dataIndex: 'reason', ellipsis: true },
+                { title: 'Priority', dataIndex: 'priority', width: 80 },
+              ]}
+            />
+          </>
         )}
       </Card>
-
-      <Modal
-        open={ruleModalOpen}
-        title={editingRule ? 'Edit rule' : 'New rule'}
-        onCancel={() => {
-          setRuleModalOpen(false);
-          setEditingRule(null);
-          ruleForm.resetFields();
-        }}
-        onOk={onSubmitRule}
-        okText={editingRule ? 'Save' : 'Create'}
-        destroyOnClose
-      >
-        <Form layout="vertical" form={ruleForm}>
-          <Form.Item
-            label="CLI"
-            name="cli"
-            rules={[{ required: true }]}
-            tooltip='Use "*" to apply to any CLI'
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label="Path"
-            name="path"
-            rules={[{ required: true }]}
-            tooltip='Glob over the command path, e.g. "repo delete *"'
-          >
-            <Input placeholder="repo delete *" />
-          </Form.Item>
-          <Form.Item label="Effect" name="effect" rules={[{ required: true }]}>
-            <Select options={DECISION_OPTS} />
-          </Form.Item>
-          <Form.Item label="Reason" name="reason">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item label="Priority" name="priority" initialValue={0}>
-            <Input type="number" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </>
   );
 }
