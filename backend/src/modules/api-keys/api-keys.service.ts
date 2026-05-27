@@ -8,6 +8,7 @@ import { AuthenticatedUser, ExtensionScope, PaginatedResponse } from '../../inte
 import { ApiKeysRepository } from './api-keys.repository';
 import { ApiKey } from './schema/api-key.schema';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
+import { UsersService } from '../users/users.service';
 
 const PREFIX_LENGTH = 8;
 const SECRET_LENGTH = 32;
@@ -28,6 +29,7 @@ export interface IssuedApiKey {
 export class ApiKeysService {
   constructor(
     private readonly repo: ApiKeysRepository,
+    private readonly users: UsersService,
     @Inject(CONFIG) private readonly config: ShellpilotModuleConfig,
   ) {}
 
@@ -51,24 +53,41 @@ export class ApiKeysService {
 
   async create(dto: CreateApiKeyDto, actor: AuthenticatedUser, scope: ExtensionScope): Promise<IssuedApiKey> {
     let ownerId = actor.id;
-    if (dto.userId && dto.userId !== actor.id) {
-      if (actor.role !== 'admin') {
+    // Target another user either by id or by email; only admins may.
+    const targetRef = dto.userId ?? dto.email;
+    if (targetRef) {
+      const resolvedId = await this.resolveUserId(targetRef);
+      if (resolvedId !== actor.id && actor.role !== 'admin') {
         throw new ForbiddenException('Only admins can create API keys for other users');
       }
-      ownerId = dto.userId;
+      ownerId = resolvedId;
     }
+    return this.mintForUser(ownerId, dto.name, dto.scopes ?? [], dto.expiresAt ? new Date(dto.expiresAt) : undefined, scope);
+  }
 
+  /**
+   * Mint a named API key for a user. Bypasses actor checks — callers (provision,
+   * enrollment) are responsible for authorising the operation. Plain token is
+   * returned ONCE.
+   */
+  async mintForUser(
+    ownerId: string,
+    name: string,
+    scopes: string[] = [],
+    expiresAt?: Date,
+    scope: ExtensionScope = {},
+  ): Promise<IssuedApiKey> {
     const { prefix, secret, token } = this.randomToken();
     const secretHash = await bcrypt.hash(secret, BCRYPT_ROUNDS);
 
     const created = (await this.repo.create(
       {
-        name: dto.name,
+        name,
         prefix,
         secretHash,
         userId: new Types.ObjectId(ownerId),
-        scopes: dto.scopes ?? [],
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+        scopes,
+        expiresAt,
         active: true,
       },
       scope,
@@ -83,6 +102,17 @@ export class ApiKeysService {
       expiresAt: created.expiresAt,
       createdAt: created.createdAt,
     };
+  }
+
+  /** Resolve a user reference (Mongo id or email) to a user id. */
+  async resolveUserId(idOrEmail: string): Promise<string> {
+    if (Types.ObjectId.isValid(idOrEmail)) {
+      const byId = await this.users.findById(idOrEmail, {}).catch(() => null);
+      if (byId) return idOrEmail;
+    }
+    const byEmail = await this.users.findByEmail(idOrEmail);
+    if (!byEmail) throw new NotFoundException(`No user or service account '${idOrEmail}'`);
+    return String((byEmail as unknown as { _id: Types.ObjectId })._id);
   }
 
   async rotate(id: string, actor: AuthenticatedUser, scope: ExtensionScope): Promise<IssuedApiKey> {

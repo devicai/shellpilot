@@ -6,6 +6,7 @@ import { ShellpilotModuleConfig } from '../../config/config.types';
 import { UsersModule } from '../users/users.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { AuthService } from './auth.service';
+import { CliAuthService } from './cli-auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -30,12 +31,13 @@ import { RolesGuard } from './guards/roles.guard';
   controllers: [AuthController],
   providers: [
     AuthService,
+    CliAuthService,
     JwtStrategy,
     JwtAuthGuard,
     ApiKeyAuthGuard,
     JwtOrApiKeyGuard,
     RolesGuard,
   ],
-  exports: [AuthService, JwtAuthGuard, ApiKeyAuthGuard, JwtOrApiKeyGuard, RolesGuard],
+  exports: [AuthService, CliAuthService, JwtAuthGuard, ApiKeyAuthGuard, JwtOrApiKeyGuard, RolesGuard],
 })
 export class AuthModule {}

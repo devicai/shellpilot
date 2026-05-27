@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsOptional, IsString, IsMongoId } from 'class-validator';
+import { IsArray, IsDateString, IsEmail, IsOptional, IsString, IsMongoId } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateApiKeyDto {
@@ -10,6 +10,11 @@ export class CreateApiKeyDto {
   @IsOptional()
   @IsMongoId()
   userId?: string;
+
+  @ApiPropertyOptional({ description: 'Owner by email (alternative to userId; admin only for other users)' })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @ApiPropertyOptional({ type: [String], example: ['rules:read', 'credentials:issue', 'traces:write'] })
   @IsOptional()
