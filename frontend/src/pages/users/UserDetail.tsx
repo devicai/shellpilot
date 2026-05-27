@@ -111,6 +111,17 @@ export function UserDetailPage() {
     return `global fallback → ${activePolicy?.name ?? 'none'}`;
   }, [user, profiles, policies, activePolicy]);
 
+  // credential modal is mode-aware — these hooks must run on every render,
+  // so they live above the `if (!user)` guard (React rules of hooks).
+  const credCliSlug = Form.useWatch('cli', credForm);
+  const credCli = useMemo(() => clis.find((c) => c.slug === credCliSlug), [clis, credCliSlug]);
+  const credMode: CliAuthMode = credCli?.auth?.mode ?? 'env';
+  const credStorable = credMode !== 'login-command' && credMode !== 'none';
+  const credCliOptions = useMemo(() => {
+    const governed = effPolicy?.clis ?? [];
+    return governed.length ? clis.filter((c) => governed.includes(c.slug)) : clis;
+  }, [clis, effPolicy]);
+
   if (!user) return null;
 
   const saveIdentity = async () => {
@@ -166,17 +177,6 @@ export function UserDetailPage() {
     setRuleModal({ open: false });
     void load();
   };
-
-  // --- credentials (mode-aware, scoped to this user) ---
-  const credCliSlug = Form.useWatch('cli', credForm);
-  const credCli = useMemo(() => clis.find((c) => c.slug === credCliSlug), [clis, credCliSlug]);
-  const credMode: CliAuthMode = credCli?.auth?.mode ?? 'env';
-  const credStorable = credMode !== 'login-command' && credMode !== 'none';
-  const credCliOptions = useMemo(() => {
-    const governed = effPolicy?.clis ?? [];
-    const list = governed.length ? clis.filter((c) => governed.includes(c.slug)) : clis;
-    return list;
-  }, [clis, effPolicy]);
 
   const submitCred = async () => {
     const v = await credForm.validateFields();
