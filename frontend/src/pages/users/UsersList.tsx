@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Modal, Form, Input, Select, Table, Tag, Space, Popconfirm, App as AntApp, Switch, Typography } from 'antd';
+import { Link } from 'react-router-dom';
+import { Button, Modal, Form, Input, Segmented, Select, Table, Tag, Space, Popconfirm, App as AntApp, Switch, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { PageHeader } from '../../components/PageHeader';
 import { usersApi, type CreateUserPayload } from '../../api/endpoints/users';
@@ -54,13 +55,14 @@ export function UsersListPage() {
           email: values.email,
           name: values.name,
           role: values.role,
+          type: values.type,
           profileId: values.profileId,
           active: values.active,
         });
         message.success('User updated');
       } else {
         await usersApi.create(values);
-        message.success('User created');
+        message.success(values.type === 'service' ? 'Service account created' : 'User created');
       }
       setOpen(false);
       form.resetFields();
@@ -91,19 +93,32 @@ export function UsersListPage() {
   return (
     <>
       <PageHeader
-        title="Users"
-        description="People with access to the ShellPilot console"
+        title="Users & Service Accounts"
+        description="Identities (people and agents/automations) governed by ShellPilot"
         extra={
-          <Button
-            type="primary"
-            onClick={() => {
-              setEditing(null);
-              form.resetFields();
-              setOpen(true);
-            }}
-          >
-            New user
-          </Button>
+          <Space>
+            <Button
+              onClick={() => {
+                setEditing(null);
+                form.resetFields();
+                form.setFieldsValue({ type: 'service', role: 'viewer' });
+                setOpen(true);
+              }}
+            >
+              New service account
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => {
+                setEditing(null);
+                form.resetFields();
+                form.setFieldsValue({ type: 'human', role: 'viewer' });
+                setOpen(true);
+              }}
+            >
+              New user
+            </Button>
+          </Space>
         }
       />
       <Table<User>
@@ -111,8 +126,13 @@ export function UsersListPage() {
         loading={loading}
         dataSource={data}
         columns={[
-          { title: 'Email', dataIndex: 'email' },
+          { title: 'Email', dataIndex: 'email', render: (v: string, r) => <Link to={`/users/${r.id}`}>{v}</Link> },
           { title: 'Name', dataIndex: 'name' },
+          {
+            title: 'Type',
+            dataIndex: 'type',
+            render: (v: string) => <Tag color={v === 'service' ? 'purple' : 'blue'}>{v ?? 'human'}</Tag>,
+          },
           {
             title: 'Role',
             dataIndex: 'role',
@@ -150,6 +170,7 @@ export function UsersListPage() {
             title: 'Actions',
             render: (_, r) => (
               <Space>
+                <Link to={`/users/${r.id}`}>Configure</Link>
                 <Button
                   type="link"
                   onClick={() => {
@@ -158,6 +179,7 @@ export function UsersListPage() {
                       email: r.email,
                       name: r.name,
                       role: r.role,
+                      type: r.type,
                       profileId: r.profileId,
                       active: r.active,
                       password: '',
@@ -212,9 +234,14 @@ export function UsersListPage() {
               <Input.Password />
             </Form.Item>
           )}
-          <Form.Item label="Role" name="role" initialValue="viewer">
-            <Select options={ROLE_OPTS} />
-          </Form.Item>
+          <Space size="large">
+            <Form.Item label="Role" name="role" initialValue="viewer">
+              <Select options={ROLE_OPTS} style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item label="Type" name="type" initialValue="human">
+              <Segmented options={[{ value: 'human', label: 'Human' }, { value: 'service', label: 'Service account' }]} />
+            </Form.Item>
+          </Space>
           <Form.Item
             label="Profile"
             name="profileId"
