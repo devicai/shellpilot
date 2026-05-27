@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import AppLayout from './components/Layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
+import { CliLoginPage } from './pages/auth/CliLogin';
 import { DashboardPage } from './pages/DashboardPage';
 import { UsersListPage } from './pages/users/UsersList';
 import { ClisListPage } from './pages/clis/ClisList';
@@ -14,6 +15,7 @@ import { ProfilesListPage } from './pages/profiles/ProfilesList';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
+  { path: '/cli-login', element: <CliLoginPage /> },
   {
     element: <ProtectedRoute />,
     children: [
