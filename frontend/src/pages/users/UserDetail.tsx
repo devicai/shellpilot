@@ -260,12 +260,31 @@ export function UserDetailPage() {
     message.success('Enrollment file downloaded (single-use, expires in 24h)');
   };
 
-  const tableData = (effPolicy?.clis ?? []).map((slug) => ({
-    slug,
-    cli: cliBySlug.get(slug),
-    rules: rulesByCli.get(slug) ?? [],
-    cred: credByCli.get(slug) ?? null,
-  }));
+  // Rows are the UNION of policy.clis and the distinct CLIs found in the
+  // policy's rules — otherwise a rule for a CLI that isn't listed in clis
+  // (legacy policies, shared policies without an explicit catalog set) would
+  // load but render nowhere. Wildcard rules (cli='*') get a pseudo-row "All
+  // CLIs (*)" so they're visible too (view-only here; editing wildcards lives
+  // in the Policy detail page).
+  const tableData = useMemo(() => {
+    const slugs = new Set<string>(effPolicy?.clis ?? []);
+    const wild: Rule[] = [];
+    for (const r of rules) {
+      if (r.cli === '*') wild.push(r);
+      else if (r.cli) slugs.add(r.cli);
+    }
+    const rows = Array.from(slugs).map((slug) => ({
+      slug,
+      cli: cliBySlug.get(slug),
+      rules: rulesByCli.get(slug) ?? [],
+      cred: credByCli.get(slug) ?? null,
+      wildcard: false,
+    }));
+    if (wild.length) {
+      rows.unshift({ slug: '*', cli: undefined, rules: wild, cred: null, wildcard: true });
+    }
+    return rows;
+  }, [effPolicy, rules, cliBySlug, rulesByCli, credByCli]);
 
   const drawerCli = drawerSlug ? cliBySlug.get(drawerSlug) ?? null : null;
   const drawerRules = drawerSlug ? (rulesByCli.get(drawerSlug) ?? []) : [];
@@ -385,7 +404,13 @@ export function UserDetailPage() {
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={<>Profile: <Link to={`/profiles/${profile.id}`}><Text strong>{profile.name}</Text></Link> · CLIs and rules below are read-only; edit them in the profile.</>}
+              message={(
+                <>
+                  Profile:{' '}<Link to={`/profiles/${profile.id}`}><Text strong>{profile.name}</Text></Link>
+                  {' '}· CLIs and rules below are read-only; edit them in the{' '}
+                  <Link to={`/profiles/${profile.id}`}>profile details →</Link>
+                </>
+              )}
             />
           )}
         </>
@@ -406,7 +431,13 @@ export function UserDetailPage() {
               type="info"
               showIcon
               style={{ marginBottom: 16 }}
-              message={<>Direct policy: <Link to={`/policies/${effPolicy.id}`}><Text strong>{effPolicy.name}</Text></Link> · CLIs and rules below are read-only; edit them in the policy.</>}
+              message={(
+                <>
+                  Direct policy:{' '}<Link to={`/policies/${effPolicy.id}`}><Text strong>{effPolicy.name}</Text></Link>
+                  {' '}· CLIs and rules below are read-only; edit them in the{' '}
+                  <Link to={`/policies/${effPolicy.id}`}>policy details →</Link>
+                </>
+              )}
             />
           )}
         </>
@@ -427,15 +458,15 @@ export function UserDetailPage() {
         dataSource={tableData}
         pagination={false}
         locale={{ emptyText: effPolicy ? 'No CLIs in this policy yet' : 'No governing policy' }}
-        onRow={(row) => (editable ? { onClick: () => setDrawerSlug(row.slug), style: { cursor: 'pointer' } } : {})}
+        onRow={(row) => (editable && !row.wildcard ? { onClick: () => setDrawerSlug(row.slug), style: { cursor: 'pointer' } } : {})}
         columns={[
           {
             title: 'CLI',
             dataIndex: 'slug',
             render: (slug: string, row) => (
               <Space>
-                <Text strong>{row.cli?.name ?? slug}</Text>
-                {editable && <EditOutlined style={{ opacity: 0.5 }} />}
+                <Text strong>{row.wildcard ? 'All CLIs' : row.cli?.name ?? slug}</Text>
+                {row.wildcard ? <Text type="secondary">(*)</Text> : (editable && <EditOutlined style={{ opacity: 0.5 }} />)}
               </Space>
             ),
           },
@@ -468,6 +499,7 @@ export function UserDetailPage() {
             key: 'cred',
             width: 200,
             render: (_, row) => {
+              if (row.wildcard) return <Text type="secondary">—</Text>;
               const mode = row.cred?.mode ?? row.cli?.auth?.mode;
               if (row.cred) {
                 return (
@@ -493,15 +525,17 @@ export function UserDetailPage() {
             key: 'actions',
             width: 120,
             render: (_: unknown, row: typeof tableData[number]) => (
-              <Space onClick={(e) => e.stopPropagation()}>
-                <Popconfirm
-                  title={`Revoke ${row.cli?.name ?? row.slug}?`}
-                  description="Removes the CLI plus its rules and stored credential for this user."
-                  onConfirm={() => revokeCli(row.slug)}
-                >
-                  <Button size="small" danger icon={<MinusCircleOutlined />}>Revoke</Button>
-                </Popconfirm>
-              </Space>
+              row.wildcard ? null : (
+                <Space onClick={(e) => e.stopPropagation()}>
+                  <Popconfirm
+                    title={`Revoke ${row.cli?.name ?? row.slug}?`}
+                    description="Removes the CLI plus its rules and stored credential for this user."
+                    onConfirm={() => revokeCli(row.slug)}
+                  >
+                    <Button size="small" danger icon={<MinusCircleOutlined />}>Revoke</Button>
+                  </Popconfirm>
+                </Space>
+              )
             ),
           }] : []),
         ]}
