@@ -22,19 +22,22 @@ import type {
 const { Title, Text, Paragraph } = Typography;
 
 type AccessMode = 'profile' | 'policy' | 'individual';
-type OsKey = 'mac' | 'linux' | 'win' | 'download';
+type OsKey = 'mac' | 'linux' | 'download';
 
 const OS_OPTIONS: { value: OsKey; label: string }[] = [
   { value: 'mac', label: 'macOS' },
   { value: 'linux', label: 'Linux' },
-  { value: 'win', label: 'Windows' },
   { value: 'download', label: 'Direct download' },
 ];
 
+// Bump CLI_VERSION when a new wrapper release is published. The release assets
+// are versioned tarballs (no `latest/download/<stable-name>` shortcut), so the
+// curl URL has to know the version. Brew handles its own.
+const CLI_VERSION = '0.5.0';
+
 const OS_INSTALL: Record<OsKey, string> = {
   mac: 'brew install devicai/tap/devic-cli-wrapper',
-  linux: 'curl -fsSL https://github.com/devicai/homebrew-tap/releases/latest/download/devic-cli-wrapper-linux-amd64 -o /usr/local/bin/devic-cli-wrapper && chmod +x /usr/local/bin/devic-cli-wrapper',
-  win: 'Invoke-WebRequest -Uri https://github.com/devicai/homebrew-tap/releases/latest/download/devic-cli-wrapper-windows-amd64.exe -OutFile devic-cli-wrapper.exe',
+  linux: `curl -fsSL https://github.com/devicai/homebrew-tap/releases/download/v${CLI_VERSION}/devic-cli-wrapper_${CLI_VERSION}_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin devic-cli-wrapper`,
   download: 'https://github.com/devicai/homebrew-tap/releases/latest',
 };
 
