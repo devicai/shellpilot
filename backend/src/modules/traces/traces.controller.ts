@@ -41,7 +41,7 @@ export class TracesController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    // excludeCli accepts a comma-separated list (e.g. "devic-cli-wrapper,devic-wrapper")
+    // excludeCli accepts a comma-separated list (e.g. "shellpilot,devic-cli-wrapper")
     // so the Dashboard and Traces page can hide the wrapper's own lifecycle
     // events without a dedicated endpoint.
     const excluded = excludeCli

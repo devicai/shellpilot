@@ -26,7 +26,8 @@ const { RangePicker } = DatePicker;
 // Traces emitted by the wrapper about itself (boot, install/uninstall
 // lifecycle, rule refresh). Hidden by default — the operator looking at this
 // page cares about agent activity, not the wrapper's bookkeeping.
-const WRAPPER_CLIS = ['devic-cli-wrapper', 'devic-wrapper'];
+// Includes legacy slugs so traces logged before the v0.6 rename stay hidden too.
+const WRAPPER_CLIS = ['shellpilot', 'devic-cli-wrapper', 'devic-wrapper'];
 
 const DECISION_OPTS = [
   { value: '', label: 'All decisions' },

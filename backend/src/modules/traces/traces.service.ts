@@ -83,7 +83,7 @@ export class TracesService {
     if (filter.decision) q.decision = filter.decision;
     if (filter.excludeCli && filter.excludeCli.length > 0) {
       // Mongo: combine explicit `cli` match (if any) with $nin so the caller
-      // can ask for "any CLI except devic-cli-wrapper" or "gh but not <list>".
+      // can ask for "any CLI except shellpilot" or "gh but not <list>".
       if (typeof q.cli === 'string') {
         q.cli = { $eq: q.cli, $nin: filter.excludeCli };
       } else {

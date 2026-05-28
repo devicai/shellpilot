@@ -15,6 +15,7 @@ import { clisApi } from '../../api/endpoints/clis';
 import { credentialsApi } from '../../api/endpoints/credentials';
 import { authApi } from '../../api/endpoints/auth';
 import { UserCliDrawer } from './UserCliDrawer';
+import { DefaultEffectControl } from '../../components/DefaultEffectControl';
 import type {
   CliAuthMode, CliCatalogItem, CredentialEntry, Decision, Policy, Profile, Rule, User,
 } from '../../types/api';
@@ -33,11 +34,11 @@ const OS_OPTIONS: { value: OsKey; label: string }[] = [
 // Bump CLI_VERSION when a new wrapper release is published. The release assets
 // are versioned tarballs (no `latest/download/<stable-name>` shortcut), so the
 // curl URL has to know the version. Brew handles its own.
-const CLI_VERSION = '0.5.0';
+const CLI_VERSION = '0.6.0';
 
 const OS_INSTALL: Record<OsKey, string> = {
-  mac: 'brew install devicai/tap/devic-cli-wrapper',
-  linux: `curl -fsSL https://github.com/devicai/homebrew-tap/releases/download/v${CLI_VERSION}/devic-cli-wrapper_${CLI_VERSION}_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin devic-cli-wrapper`,
+  mac: 'brew install devicai/tap/shellpilot',
+  linux: `curl -fsSL https://github.com/devicai/homebrew-tap/releases/download/v${CLI_VERSION}/shellpilot_${CLI_VERSION}_linux_amd64.tar.gz | sudo tar -xz -C /usr/local/bin shellpilot`,
   download: 'https://github.com/devicai/homebrew-tap/releases/latest',
 };
 
@@ -266,6 +267,20 @@ export function UserDetailPage() {
     }
   };
 
+  // Default effect for the user's individual policy. The control only renders
+  // in individual mode (where editable === true), so this writes straight
+  // through to the owner-scoped policy.
+  const setDefaultEffect = async (next: Decision) => {
+    if (!effPolicy || effPolicy.defaultEffect === next) return;
+    try {
+      await rulesApi.updatePolicy(effPolicy.id, { defaultEffect: next });
+      message.success('Default effect saved');
+      await load();
+    } catch (e) {
+      reportError(e, 'Failed to save default effect');
+    }
+  };
+
   const addCli = async () => {
     if (!effPolicy || !addCliSlug) return;
     const next = Array.from(new Set([...(effPolicy.clis ?? []), addCliSlug]));
@@ -371,19 +386,19 @@ export function UserDetailPage() {
       {user.type === 'service' ? (
         <>
           <SectionLabel>Admin provisions this service account (replace the admin key):</SectionLabel>
-          <CodeBlock value={`devic-cli-wrapper auth provision --base-url ${host} --api-key <ADMIN_KEY> --service-account ${user.email}`} />
+          <CodeBlock value={`shellpilot auth provision --base-url ${host} --api-key <ADMIN_KEY> --service-account ${user.email}`} />
         </>
       ) : (
         <>
           <SectionLabel>User browser login:</SectionLabel>
-          <CodeBlock value={`devic-cli-wrapper login --base-url ${host}`} />
+          <CodeBlock value={`shellpilot login --base-url ${host}`} />
         </>
       )}
 
       <Paragraph style={{ marginTop: 16, marginBottom: 8 }}>Or provision this user's machine with an enrollment file:</Paragraph>
       <Space>
         <Button icon={<DownloadOutlined />} onClick={downloadEnrollment}>Download enrollment file</Button>
-        <Text type="secondary">then: <Text code>devic-cli-wrapper auth --file shellpilot_credentials.json --api-key &lt;ADMIN_KEY&gt;</Text></Text>
+        <Text type="secondary">then: <Text code>shellpilot auth --file shellpilot_credentials.json --api-key &lt;ADMIN_KEY&gt;</Text></Text>
       </Space>
 
       <Divider />
@@ -474,6 +489,26 @@ export function UserDetailPage() {
           description="Create individual rules to define which CLIs they can run and the rules that govern them. The current effective CLIs and rules (if any) are copied as a starting point."
           action={<Button size="small" onClick={createIndividualRules}>Create individual rules</Button>}
         />
+      )}
+
+      {/*
+        Default effect for the policy backing this user. Editable only when
+        individual rules are active — for direct policy / profile modes the
+        operator has to edit it where the policy lives (the read-only banner
+        above links there). Keeps the global behaviour visible next to the
+        CLIs table so nobody has to dig into PolicyDetail to know what
+        happens when no rule matches.
+      */}
+      {effPolicy && (
+        <Space size="middle" align="center" style={{ marginBottom: 12 }}>
+          <Text type="secondary">Default effect when no rule matches</Text>
+          <DefaultEffectControl
+            value={effPolicy.defaultEffect}
+            onChange={(v) => void setDefaultEffect(v)}
+            disabled={!editable}
+            size="small"
+          />
+        </Space>
       )}
 
       <Table

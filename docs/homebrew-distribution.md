@@ -1,6 +1,6 @@
 # Distributing the wrapper via Homebrew
 
-The ShellPilot CLI wrapper (`devic-cli-wrapper`, the Go binary that intercepts and
+The ShellPilot CLI wrapper (`shellpilot`, the Go binary that intercepts and
 governs agent CLI calls) is distributed to end machines through a **public
 Homebrew tap**. This document is the source of truth for that channel: how it is
 laid out, why, and how to cut a new version.
@@ -13,12 +13,18 @@ laid out, why, and how to cut a new version.
 
 ```sh
 brew tap devicai/tap
-brew install devic-cli-wrapper
-devic-cli-wrapper version          # -> devic-cli-wrapper prototype X.Y.Z
-devic-cli-wrapper install          # install + shim the CLIs declared in policy
+brew install shellpilot
+shellpilot version          # -> shellpilot X.Y.Z
+shellpilot install          # install + shim the CLIs declared in policy
 ```
 
-Upgrades: `brew update && brew upgrade devic-cli-wrapper`.
+Upgrades: `brew update && brew upgrade shellpilot`.
+
+> **Migrating from `devic-cli-wrapper` (pre-v0.6):** the binary was renamed in
+> v0.6 and the on-disk paths moved from `~/.devic/` to `~/.shellpilot/`, and
+> env vars from `DEVIC_*` to `SHELLPILOT_*`. After upgrade re-authenticate with
+> `shellpilot login --base-url <host>`. The old binary and its shims should be
+> removed first: `brew uninstall devic-cli-wrapper && rm -rf ~/.devic`.
 
 ## Why Homebrew (and why unsigned is fine here)
 
@@ -33,16 +39,16 @@ and defers signing/notarization to a future public direct-download installer.
 
 - **Tap repo:** [`devicai/homebrew-tap`](https://github.com/devicai/homebrew-tap)
   — public. The `homebrew-` prefix is what lets `brew tap devicai/tap` resolve it.
-- **Formula:** `Formula/devic-cli-wrapper.rb` in that repo. Uses
+- **Formula:** `Formula/shellpilot.rb` in that repo. Uses
   `on_macos`/`on_linux` + `on_arm`/`on_intel` to select the right tarball and
-  sha256, then `bin.install "devic-cli-wrapper"`.
+  sha256, then `bin.install "shellpilot"`.
 - **Binaries:** attached as assets to a GitHub Release **on the tap repo itself**
-  (e.g. tag `v0.4.0`), so the private source repo stays private. Each release
+  (e.g. tag `v0.6.0`), so the private source repo stays private. Each release
   carries 4 tarballs + a `checksums.txt`:
-  - `devic-cli-wrapper_<ver>_darwin_arm64.tar.gz`
-  - `devic-cli-wrapper_<ver>_darwin_amd64.tar.gz`
-  - `devic-cli-wrapper_<ver>_linux_amd64.tar.gz`
-  - `devic-cli-wrapper_<ver>_linux_arm64.tar.gz`
+  - `shellpilot_<ver>_darwin_arm64.tar.gz`
+  - `shellpilot_<ver>_darwin_amd64.tar.gz`
+  - `shellpilot_<ver>_linux_amd64.tar.gz`
+  - `shellpilot_<ver>_linux_arm64.tar.gz`
 
 ## Build tooling (in the private wrapper repo)
 
@@ -58,17 +64,16 @@ and defers signing/notarization to a future public direct-download installer.
 1. In the wrapper repo, bump `wrapperVersion` in `prototype/main.go`
    (or pass the version as `$1` to the script).
 2. `cd prototype && ./build-release.sh` → artifacts + `dist/checksums.txt`.
-3. In the tap repo, edit `Formula/devic-cli-wrapper.rb`: update `version`, the
-   four `url`s (new tag) and the four `sha256` from `dist/checksums.txt`.
-   Commit & push.
+3. In the tap repo, edit `Formula/shellpilot.rb`: update `version`, the four
+   `url`s (new tag) and the four `sha256` from `dist/checksums.txt`. Commit & push.
 4. Publish the release:
    ```sh
    gh release create vX.Y.Z --repo devicai/homebrew-tap \
-     dist/devic-cli-wrapper_X.Y.Z_*.tar.gz dist/checksums.txt
+     dist/shellpilot_X.Y.Z_*.tar.gz dist/checksums.txt
    ```
-5. Verify: `brew update && brew upgrade devic-cli-wrapper` (or a fresh
-   `brew install`), then `devic-cli-wrapper version`. `brew test
-   devic-cli-wrapper` runs the formula's smoke test.
+5. Verify: `brew update && brew upgrade shellpilot` (or a fresh
+   `brew install`), then `shellpilot version`. `brew test shellpilot` runs the
+   formula's smoke test.
 
 ## Decisions on record
 
