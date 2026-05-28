@@ -8,10 +8,9 @@ import { rulesApi, WEBHOOK_EVENTS, type WebhookEvent } from '../../api/endpoints
 import { clisApi } from '../../api/endpoints/clis';
 import { DecisionTag } from '../../components/PolicyTags';
 import { DefaultEffectControl } from '../../components/DefaultEffectControl';
-import type { CliCatalogItem, Decision, Enforcement, Policy, Rule } from '../../types/api';
+import type { CliCatalogItem, Enforcement, Policy, Rule } from '../../types/api';
 
 const { Title, Text } = Typography;
-const DECISIONS: Decision[] = ['allow', 'deny', 'requires-approval'];
 const ENFORCEMENTS: Enforcement[] = ['enforce', 'warn', 'audit'];
 const WEBHOOK_LABELS: Record<WebhookEvent, string> = {
   on_deny: 'On deny',
