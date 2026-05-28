@@ -176,7 +176,7 @@ export function PolicyDetailPage() {
             <Input placeholder="repo delete *" />
           </Form.Item>
           <Form.Item name="effect" label="Effect" rules={[{ required: true }]}>
-            <Select options={DECISIONS.map((d) => ({ value: d, label: d }))} />
+            <DefaultEffectControl />
           </Form.Item>
           <Form.Item name="reason" label="Reason"><Input /></Form.Item>
           <Form.Item name="priority" label="Priority"><InputNumber min={0} /></Form.Item>

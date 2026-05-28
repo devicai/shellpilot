@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert, App, Button, Card, Drawer, Form, Input, InputNumber, Modal, Popconfirm,
-  Select, Space, Table, Tag, Typography,
+  Space, Table, Tag, Typography,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { rulesApi } from '../../api/endpoints/rules';
 import { credentialsApi } from '../../api/endpoints/credentials';
 import { DecisionTag } from '../../components/PolicyTags';
-import type { CliAuthMode, CliCatalogItem, CredentialEntry, Decision, Rule } from '../../types/api';
+import { DefaultEffectControl } from '../../components/DefaultEffectControl';
+import type { CliAuthMode, CliCatalogItem, CredentialEntry, Rule } from '../../types/api';
 
 const { Text } = Typography;
-const DECISIONS: Decision[] = ['allow', 'deny', 'requires-approval'];
 
 interface Props {
   open: boolean;
@@ -215,7 +215,7 @@ export function UserCliDrawer({ open, onClose, userId, cli, policyId, rules, cre
             <Input placeholder="repo delete *" />
           </Form.Item>
           <Form.Item name="effect" label="Effect" rules={[{ required: true }]}>
-            <Select options={DECISIONS.map((d) => ({ value: d, label: d }))} />
+            <DefaultEffectControl />
           </Form.Item>
           <Form.Item name="reason" label="Reason"><Input /></Form.Item>
           <Form.Item name="priority" label="Priority"><InputNumber min={0} /></Form.Item>
