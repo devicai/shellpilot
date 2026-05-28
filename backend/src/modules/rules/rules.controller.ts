@@ -46,16 +46,21 @@ export class RulesController {
   @ApiBearerAuth()
   @UseGuards(JwtOrApiKeyGuard)
   @Get('policies')
-  @ApiOperation({ summary: 'List policies (JWT or API key)' })
+  @ApiOperation({ summary: 'List policies (JWT or API key). Pass ownerUserId to fetch a user\'s individual policies; without it the list is shared policies only.' })
   listPolicies(
     @Scope() scope: ExtensionScope,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('ownerUserId') ownerUserId?: string,
   ) {
-    return this.service.listPolicies(scope, {
-      limit: limit ? parseInt(limit, 10) : undefined,
-      offset: offset ? parseInt(offset, 10) : undefined,
-    });
+    return this.service.listPolicies(
+      scope,
+      {
+        limit: limit ? parseInt(limit, 10) : undefined,
+        offset: offset ? parseInt(offset, 10) : undefined,
+      },
+      ownerUserId,
+    );
   }
 
   @ApiBearerAuth()

@@ -228,22 +228,39 @@ export function UserDetailPage() {
     }
   };
 
+  // Individual rules are sticky: if the user already has an owner-scoped
+  // policy from a previous switch (kept around when they jumped to a shared
+  // policy or profile), reactivate it instead of creating a new one — no
+  // duplicate / orphan policies, and the user's own rules survive.
   const createIndividualRules = async () => {
-    const created = await rulesApi.createPolicy({
-      name: `Individual rules — ${user.email}`,
-      description: `Private CLIs & rules for ${user.email}`,
-      defaultEffect: effPolicy?.defaultEffect ?? 'deny',
-      enforcement: effPolicy?.enforcement ?? 'warn',
-      clis: effPolicy?.clis ?? [],
-      ownerUserId: user.id,
-    });
-    for (const r of rules) {
-      await rulesApi.createRule(created.id, { cli: r.cli, path: r.path, effect: r.effect, reason: r.reason, priority: r.priority });
+    try {
+      const existing = await rulesApi.listPolicies({ ownerUserId: user.id, limit: 1 });
+      if (existing.data.length > 0) {
+        const own = existing.data[0];
+        await usersApi.update(id, { policyId: own.id, profileId: '' });
+        message.success('Individual rules reactivated');
+        setAccessMode('individual');
+        await load();
+        return;
+      }
+      const created = await rulesApi.createPolicy({
+        name: `Individual rules — ${user.email}`,
+        description: `Private CLIs & rules for ${user.email}`,
+        defaultEffect: effPolicy?.defaultEffect ?? 'deny',
+        enforcement: effPolicy?.enforcement ?? 'warn',
+        clis: effPolicy?.clis ?? [],
+        ownerUserId: user.id,
+      });
+      for (const r of rules) {
+        await rulesApi.createRule(created.id, { cli: r.cli, path: r.path, effect: r.effect, reason: r.reason, priority: r.priority });
+      }
+      await usersApi.update(id, { policyId: created.id, profileId: '' });
+      message.success('Individual rules created — editable now');
+      setAccessMode('individual');
+      await load();
+    } catch (e) {
+      reportError(e, 'Failed to create individual rules');
     }
-    await usersApi.update(id, { policyId: created.id, profileId: '' });
-    message.success('Individual rules created — editable now');
-    setAccessMode('individual');
-    await load();
   };
 
   const addCli = async () => {
