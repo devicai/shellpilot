@@ -6,6 +6,7 @@ import {
   faCircleXmark,
   faEye,
   faHourglassHalf,
+  faKey,
   faShieldHalved,
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
@@ -32,7 +33,12 @@ const ENFORCEMENT_META: Record<Enforcement, TagMeta> = {
   },
 };
 
-const DECISION_META: Record<Decision, TagMeta> = {
+// Widened to `string` to accept the runtime/operational decisions the wrapper
+// emits in traces beyond pure policy decisions (e.g. `jit-issued` when the
+// wrapper injected a short-lived credential; `binary-missing` when the shim
+// found no real binary). The TS-narrow `Decision` keys are still required at
+// compile time via DecisionTag's prop.
+const DECISION_META: Record<string, TagMeta> = {
   allow: {
     color: 'green',
     icon: faCircleCheck,
@@ -47,6 +53,11 @@ const DECISION_META: Record<Decision, TagMeta> = {
     color: 'gold',
     icon: faHourglassHalf,
     tip: 'Requires approval — execution is paused until an operator approves the command out-of-band.',
+  },
+  'jit-issued': {
+    color: 'blue',
+    icon: faKey,
+    tip: 'JIT credential issued — the wrapper injected a short-lived credential for this invocation.',
   },
 };
 
