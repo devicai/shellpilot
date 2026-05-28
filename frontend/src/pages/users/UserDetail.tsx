@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  Alert, App, Button, Card, Form, Input, Modal, Popconfirm,
+  Alert, App, Button, Divider, Form, Input, Modal, Popconfirm,
   Segmented, Select, Space, Switch, Table, Tag, Typography,
 } from 'antd';
-import { CopyOutlined, DownloadOutlined, EditOutlined, KeyOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined, CloseCircleOutlined, CopyOutlined, DownloadOutlined,
+  EditOutlined, ExclamationCircleOutlined, KeyOutlined, MinusCircleOutlined, PlusOutlined,
+} from '@ant-design/icons';
 import { usersApi } from '../../api/endpoints/users';
 import { profilesApi } from '../../api/endpoints/profiles';
 import { rulesApi } from '../../api/endpoints/rules';
@@ -40,8 +43,16 @@ const CRED_LABEL: Record<CliAuthMode, string> = {
 };
 
 const EFFECT_COLOR: Record<Decision, string> = { allow: 'green', deny: 'red', 'requires-approval': 'gold' };
+const EFFECT_ICON: Record<Decision, ReactNode> = {
+  allow: <CheckCircleOutlined />,
+  deny: <CloseCircleOutlined />,
+  'requires-approval': <ExclamationCircleOutlined />,
+};
 
 const RULE_CHIP_LIMIT = 3;
+// Inline monospace path inside a rule chip — no extra border/background, so we
+// don't get the doubled-border look from wrapping <Text code> in a <Tag>.
+const PATH_FONT: CSSProperties = { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12 };
 
 function computeEffectiveId(u: User, profs: Profile[], pols: Policy[]): string | null {
   if (u.policyId) return u.policyId;
@@ -60,6 +71,10 @@ function CodeBlock({ value }: { value: string }) {
       <Button icon={<CopyOutlined />} onClick={() => { void navigator.clipboard.writeText(value); message.success('Copied'); }} />
     </Space.Compact>
   );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return <Text type="secondary" style={{ display: 'block', marginBottom: 6 }}>{children}</Text>;
 }
 
 export function UserDetailPage() {
@@ -121,7 +136,6 @@ export function UserDetailPage() {
   );
   const editable = isIndividual;
 
-  // Maps for the table
   const cliBySlug = useMemo(() => new Map(clis.map((c) => [c.slug, c])), [clis]);
   const rulesByCli = useMemo(() => {
     const m = new Map<string, Rule[]>();
@@ -149,7 +163,7 @@ export function UserDetailPage() {
     const v = await idForm.validateFields();
     await usersApi.update(id, v);
     message.success('Saved');
-    void load();
+    await load();
   };
 
   const changePassword = async () => {
@@ -160,13 +174,18 @@ export function UserDetailPage() {
     setPwdOpen(false);
   };
 
+  // Direct-manipulation saves: each picker change writes and reloads. We await
+  // load() so the UI is always rendered against fresh server state, and toast
+  // so the user sees that the change landed.
   const setProfileFor = async (profileId?: string) => {
     await usersApi.update(id, { profileId: profileId || '', policyId: '' });
-    void load();
+    message.success(profileId ? 'Profile assigned' : 'Profile cleared');
+    await load();
   };
   const setPolicyFor = async (policyId?: string) => {
     await usersApi.update(id, { policyId: policyId || '', profileId: '' });
-    void load();
+    message.success(policyId ? 'Direct policy assigned' : 'Direct policy cleared');
+    await load();
   };
 
   const createIndividualRules = async () => {
@@ -184,7 +203,7 @@ export function UserDetailPage() {
     await usersApi.update(id, { policyId: created.id, profileId: '' });
     message.success('Individual rules created — editable now');
     setAccessMode('individual');
-    void load();
+    await load();
   };
 
   const addCli = async () => {
@@ -194,13 +213,13 @@ export function UserDetailPage() {
     setAddCliOpen(false);
     const slug = addCliSlug;
     setAddCliSlug(undefined);
+    message.success('CLI added');
     await load();
-    // Open the drawer for the newly added CLI to start configuring rules/cred.
     setDrawerSlug(slug);
   };
 
   // Revoke a CLI from the user: remove from policy.clis, drop its rules, and
-  // delete the user's stored credential for it. Bounded by what's loaded.
+  // delete the user's stored credential for it.
   const revokeCli = async (slug: string) => {
     if (!effPolicy) return;
     await rulesApi.updatePolicy(effPolicy.id, {
@@ -212,7 +231,7 @@ export function UserDetailPage() {
     const cred = credByCli.get(slug);
     if (cred) await credentialsApi.remove(cred.id);
     message.success('CLI revoked from this user');
-    void load();
+    await load();
   };
 
   const downloadEnrollment = async () => {
@@ -238,7 +257,6 @@ export function UserDetailPage() {
   const drawerRules = drawerSlug ? (rulesByCli.get(drawerSlug) ?? []) : [];
   const drawerCred = drawerSlug ? credByCli.get(drawerSlug) ?? null : null;
 
-  // Available catalog CLIs not already in the user's policy.
   const addableClis = clis.filter((c) => !(effPolicy?.clis ?? []).includes(c.slug));
 
   return (
@@ -251,226 +269,229 @@ export function UserDetailPage() {
       </Space>
 
       {/* ===== User details ===== */}
-      <Card
-        title="User details"
-        style={{ marginBottom: 16 }}
-        extra={(
-          <Space>
-            <Button onClick={() => { pwdForm.resetFields(); setPwdOpen(true); }}>Change password</Button>
-            <Button type="primary" onClick={saveIdentity}>Save</Button>
-          </Space>
-        )}
-      >
-        <Paragraph type="secondary" style={{ marginTop: -8 }}>
-          <Text strong>{user.email}</Text> · id <Text code copyable>{user.id}</Text>
-        </Paragraph>
-        <Form form={idForm} layout="vertical">
-          <Form.Item name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>
-          <Space size="large">
-            <Form.Item name="role" label="Role">
-              <Select style={{ width: 160 }} options={['admin', 'operator', 'viewer'].map((r) => ({ value: r, label: r }))} />
-            </Form.Item>
-            <Form.Item name="type" label="Type">
-              <Segmented options={[{ value: 'human', label: 'Human' }, { value: 'service', label: 'Service account' }]} />
-            </Form.Item>
-            <Form.Item name="active" label="Active" valuePropName="checked"><Switch /></Form.Item>
-          </Space>
-        </Form>
-      </Card>
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Title level={4} style={{ margin: 0 }}>User details</Title>
+        <Space>
+          <Button onClick={() => { pwdForm.resetFields(); setPwdOpen(true); }}>Change password</Button>
+          <Button type="primary" onClick={saveIdentity}>Save</Button>
+        </Space>
+      </Space>
+      <Paragraph type="secondary" style={{ marginBottom: 12 }}>
+        <Text strong>{user.email}</Text> · id <Text code copyable>{user.id}</Text>
+      </Paragraph>
+      <Form form={idForm} layout="vertical">
+        <Form.Item name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>
+        <Space size="large">
+          <Form.Item name="role" label="Role">
+            <Select style={{ width: 160 }} options={['admin', 'operator', 'viewer'].map((r) => ({ value: r, label: r }))} />
+          </Form.Item>
+          <Form.Item name="type" label="Type">
+            <Segmented options={[{ value: 'human', label: 'Human' }, { value: 'service', label: 'Service account' }]} />
+          </Form.Item>
+          <Form.Item name="active" label="Active" valuePropName="checked"><Switch /></Form.Item>
+        </Space>
+      </Form>
+
+      <Divider />
 
       {/* ===== Connect a device ===== */}
-      <Card title="Connect a device" style={{ marginBottom: 16 }}>
-        <Space size="middle" style={{ marginBottom: 8 }} wrap>
-          <Text type="secondary">Authenticate the CLI on a machine. Install:</Text>
-          <Segmented value={os} onChange={(v) => setOs(v as OsKey)} options={OS_OPTIONS} size="small" />
-        </Space>
-        {os === 'download' ? (
-          <Space>
-            <Button icon={<DownloadOutlined />} href={OS_INSTALL.download} target="_blank">
-              Open GitHub releases
-            </Button>
-            <Text type="secondary">Pick the binary for your platform from the latest release.</Text>
-          </Space>
-        ) : (
-          <CodeBlock value={OS_INSTALL[os]} />
-        )}
-
-        <div style={{ height: 16 }} />
-        {user.type === 'service' ? (
-          <>
-            <Text>Admin provisions this service account (replace the admin key):</Text>
-            <CodeBlock value={`devic-cli-wrapper auth provision --base-url ${host} --api-key <ADMIN_KEY> --service-account ${user.email}`} />
-          </>
-        ) : (
-          <>
-            <Text>User browser login:</Text>
-            <CodeBlock value={`devic-cli-wrapper login --base-url ${host}`} />
-          </>
-        )}
-
-        <Paragraph style={{ marginTop: 16, marginBottom: 8 }}>Or provision this user's machine with an enrollment file:</Paragraph>
+      <Title level={4} style={{ margin: 0, marginBottom: 12 }}>Connect a device</Title>
+      <Space size="middle" style={{ marginBottom: 8 }} wrap>
+        <Text type="secondary">Authenticate the CLI on a machine. Install:</Text>
+        <Segmented value={os} onChange={(v) => setOs(v as OsKey)} options={OS_OPTIONS} size="small" />
+      </Space>
+      {os === 'download' ? (
         <Space>
-          <Button icon={<DownloadOutlined />} onClick={downloadEnrollment}>Download enrollment file</Button>
-          <Text type="secondary">then: <Text code>devic-cli-wrapper auth --file shellpilot_credentials.json --api-key &lt;ADMIN_KEY&gt;</Text></Text>
+          <Button icon={<DownloadOutlined />} href={OS_INSTALL.download} target="_blank">
+            Open GitHub releases
+          </Button>
+          <Text type="secondary">Pick the binary for your platform from the latest release.</Text>
         </Space>
-      </Card>
+      ) : (
+        <CodeBlock value={OS_INSTALL[os]} />
+      )}
 
-      {/* ===== Access + CLIs table ===== */}
-      <Card style={{ marginBottom: 16 }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} align="start" wrap>
-          <Segmented
-            value={accessMode}
-            onChange={(v) => setAccessMode(v as AccessMode)}
-            options={[
-              { value: 'profile', label: 'Profile' },
-              { value: 'policy', label: 'Direct policy' },
-              { value: 'individual', label: 'Individual rules' },
-            ]}
-          />
-          {editable && effPolicy && (
-            <Button icon={<PlusOutlined />} onClick={() => { setAddCliSlug(undefined); setAddCliOpen(true); }} disabled={addableClis.length === 0}>
-              Add new CLI
-            </Button>
-          )}
-        </Space>
+      <div style={{ height: 16 }} />
+      {user.type === 'service' ? (
+        <>
+          <SectionLabel>Admin provisions this service account (replace the admin key):</SectionLabel>
+          <CodeBlock value={`devic-cli-wrapper auth provision --base-url ${host} --api-key <ADMIN_KEY> --service-account ${user.email}`} />
+        </>
+      ) : (
+        <>
+          <SectionLabel>User browser login:</SectionLabel>
+          <CodeBlock value={`devic-cli-wrapper login --base-url ${host}`} />
+        </>
+      )}
 
-        {/* Mode-specific top: pickers for profile/policy, banner with reference, or CTA */}
-        {accessMode === 'profile' && (
-          <>
-            <Form.Item label="Profile (reusable bundle of CLIs + policy)" style={{ marginBottom: 12 }}>
-              <Select
-                allowClear
-                style={{ maxWidth: 360 }}
-                placeholder="Select a profile"
-                value={user.profileId}
-                onChange={(v) => setProfileFor(v)}
-                options={profiles.map((p) => ({ value: p.id, label: p.name }))}
-              />
-            </Form.Item>
-            {profile && (
-              <Alert
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message={<>Profile: <Link to={`/profiles/${profile.id}`}><Text strong>{profile.name}</Text></Link> · CLIs and rules below are read-only; edit them in the profile.</>}
-              />
-            )}
-          </>
-        )}
-        {accessMode === 'policy' && (
-          <>
-            <Form.Item label="Shared policy assigned directly" style={{ marginBottom: 12 }} tooltip="A global policy from the Policies catalog. Edited there, not here.">
-              <Select
-                allowClear
-                style={{ width: 360 }}
-                placeholder="Select a shared policy"
-                value={directGlobalValue}
-                onChange={(v) => setPolicyFor(v)}
-                options={policies.map((p) => ({ value: p.id, label: p.name }))}
-              />
-            </Form.Item>
-            {effPolicy && !isIndividual && user.policyId && (
-              <Alert
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message={<>Direct policy: <Link to={`/policies/${effPolicy.id}`}><Text strong>{effPolicy.name}</Text></Link> · CLIs and rules below are read-only; edit them in the policy.</>}
-              />
-            )}
-          </>
-        )}
-        {accessMode === 'individual' && !isIndividual && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="This user has no individual rules yet"
-            description="Create individual rules to define which CLIs they can run and the rules that govern them. The current effective CLIs and rules (if any) are copied as a starting point."
-            action={<Button size="small" onClick={createIndividualRules}>Create individual rules</Button>}
-          />
-        )}
+      <Paragraph style={{ marginTop: 16, marginBottom: 8 }}>Or provision this user's machine with an enrollment file:</Paragraph>
+      <Space>
+        <Button icon={<DownloadOutlined />} onClick={downloadEnrollment}>Download enrollment file</Button>
+        <Text type="secondary">then: <Text code>devic-cli-wrapper auth --file shellpilot_credentials.json --api-key &lt;ADMIN_KEY&gt;</Text></Text>
+      </Space>
 
-        {/* The unified CLIs table */}
-        <Table
-          rowKey="slug"
-          dataSource={tableData}
-          pagination={false}
-          locale={{ emptyText: effPolicy ? 'No CLIs in this policy yet' : 'No governing policy' }}
-          onRow={(row) => (editable ? { onClick: () => setDrawerSlug(row.slug), style: { cursor: 'pointer' } } : {})}
-          columns={[
-            {
-              title: 'CLI',
-              dataIndex: 'slug',
-              render: (slug: string, row) => (
-                <Space>
-                  <Text strong>{row.cli?.name ?? slug}</Text>
-                  {editable && <EditOutlined style={{ opacity: 0.6 }} />}
-                </Space>
-              ),
-            },
-            {
-              title: 'Rules',
-              key: 'rules',
-              render: (_, row) => {
-                if (!row.rules.length) return <Text type="secondary">no rules</Text>;
-                const shown = row.rules.slice(0, RULE_CHIP_LIMIT);
-                const more = row.rules.length - shown.length;
-                return (
-                  <Space size={4} wrap>
-                    {shown.map((r) => (
-                      <Tag key={r.id} color={EFFECT_COLOR[r.effect]} style={{ margin: 0 }}>
-                        <Text code style={{ fontSize: 11 }}>{r.path}</Text>
-                      </Tag>
-                    ))}
-                    {more > 0 && <Text type="secondary">(+ {more} more)</Text>}
-                  </Space>
-                );
-              },
-            },
-            {
-              title: 'Credentials',
-              key: 'cred',
-              width: 200,
-              render: (_, row) => {
-                const mode = row.cred?.mode ?? row.cli?.auth?.mode;
-                if (row.cred) {
-                  return (
-                    <Space size={6}>
-                      <KeyOutlined style={{ color: '#1677ff' }} />
-                      <Text>{CRED_LABEL[row.cred.mode]}</Text>
-                    </Space>
-                  );
-                }
-                if (mode === 'login-command' || mode === 'none') {
-                  return <Text type="secondary">— ({mode})</Text>;
-                }
-                return (
-                  <Space size={6}>
-                    <KeyOutlined style={{ color: '#aaa' }} />
-                    <Text type="secondary">No credential</Text>
-                  </Space>
-                );
-              },
-            },
-            ...(editable ? [{
-              title: 'Actions',
-              key: 'actions',
-              width: 120,
-              render: (_: unknown, row: typeof tableData[number]) => (
-                <Space onClick={(e) => e.stopPropagation()}>
-                  <Popconfirm
-                    title={`Revoke ${row.cli?.name ?? row.slug}?`}
-                    description="Removes the CLI plus its rules and stored credential for this user."
-                    onConfirm={() => revokeCli(row.slug)}
-                  >
-                    <Button size="small" danger icon={<MinusCircleOutlined />}>Revoke</Button>
-                  </Popconfirm>
-                </Space>
-              ),
-            }] : []),
+      <Divider />
+
+      {/* ===== Access + CLIs ===== */}
+      <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} align="start" wrap>
+        <Segmented
+          value={accessMode}
+          onChange={(v) => setAccessMode(v as AccessMode)}
+          options={[
+            { value: 'profile', label: 'Profile' },
+            { value: 'policy', label: 'Direct policy' },
+            { value: 'individual', label: 'Individual rules' },
           ]}
         />
-      </Card>
+        {editable && effPolicy && (
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => { setAddCliSlug(undefined); setAddCliOpen(true); }}
+            disabled={addableClis.length === 0}
+          >
+            Add new CLI
+          </Button>
+        )}
+      </Space>
+
+      {/* Mode-specific top: pickers + reference banner, or CTA */}
+      {accessMode === 'profile' && (
+        <>
+          <SectionLabel>Profile (reusable bundle of CLIs + policy)</SectionLabel>
+          <Select
+            allowClear
+            style={{ width: 360, marginBottom: 12 }}
+            placeholder="Select a profile"
+            value={user.profileId}
+            onChange={(v) => void setProfileFor(v)}
+            options={profiles.map((p) => ({ value: p.id, label: p.name }))}
+          />
+          {profile && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={<>Profile: <Link to={`/profiles/${profile.id}`}><Text strong>{profile.name}</Text></Link> · CLIs and rules below are read-only; edit them in the profile.</>}
+            />
+          )}
+        </>
+      )}
+      {accessMode === 'policy' && (
+        <>
+          <SectionLabel>Shared policy assigned directly</SectionLabel>
+          <Select
+            allowClear
+            style={{ width: 360, marginBottom: 12 }}
+            placeholder="Select a shared policy"
+            value={directGlobalValue}
+            onChange={(v) => void setPolicyFor(v)}
+            options={policies.map((p) => ({ value: p.id, label: p.name }))}
+          />
+          {effPolicy && !isIndividual && user.policyId && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={<>Direct policy: <Link to={`/policies/${effPolicy.id}`}><Text strong>{effPolicy.name}</Text></Link> · CLIs and rules below are read-only; edit them in the policy.</>}
+            />
+          )}
+        </>
+      )}
+      {accessMode === 'individual' && !isIndividual && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="This user has no individual rules yet"
+          description="Create individual rules to define which CLIs they can run and the rules that govern them. The current effective CLIs and rules (if any) are copied as a starting point."
+          action={<Button size="small" onClick={createIndividualRules}>Create individual rules</Button>}
+        />
+      )}
+
+      <Table
+        rowKey="slug"
+        dataSource={tableData}
+        pagination={false}
+        locale={{ emptyText: effPolicy ? 'No CLIs in this policy yet' : 'No governing policy' }}
+        onRow={(row) => (editable ? { onClick: () => setDrawerSlug(row.slug), style: { cursor: 'pointer' } } : {})}
+        columns={[
+          {
+            title: 'CLI',
+            dataIndex: 'slug',
+            render: (slug: string, row) => (
+              <Space>
+                <Text strong>{row.cli?.name ?? slug}</Text>
+                {editable && <EditOutlined style={{ opacity: 0.5 }} />}
+              </Space>
+            ),
+          },
+          {
+            title: 'Rules',
+            key: 'rules',
+            render: (_, row) => {
+              if (!row.rules.length) return <Text type="secondary">no rules</Text>;
+              const shown = row.rules.slice(0, RULE_CHIP_LIMIT);
+              const more = row.rules.length - shown.length;
+              return (
+                <Space size={[6, 6]} wrap>
+                  {shown.map((r) => (
+                    <Tag
+                      key={r.id}
+                      color={EFFECT_COLOR[r.effect]}
+                      icon={EFFECT_ICON[r.effect]}
+                      style={{ margin: 0 }}
+                    >
+                      <span style={PATH_FONT}>{r.path}</span>
+                    </Tag>
+                  ))}
+                  {more > 0 && <Text type="secondary">(+ {more} more)</Text>}
+                </Space>
+              );
+            },
+          },
+          {
+            title: 'Credentials',
+            key: 'cred',
+            width: 200,
+            render: (_, row) => {
+              const mode = row.cred?.mode ?? row.cli?.auth?.mode;
+              if (row.cred) {
+                return (
+                  <Space size={6}>
+                    <KeyOutlined style={{ color: '#1677ff' }} />
+                    <Text>{CRED_LABEL[row.cred.mode]}</Text>
+                  </Space>
+                );
+              }
+              if (mode === 'login-command' || mode === 'none') {
+                return <Text type="secondary">— ({mode})</Text>;
+              }
+              return (
+                <Space size={6}>
+                  <KeyOutlined style={{ color: '#aaa' }} />
+                  <Text type="secondary">No credential</Text>
+                </Space>
+              );
+            },
+          },
+          ...(editable ? [{
+            title: 'Actions',
+            key: 'actions',
+            width: 120,
+            render: (_: unknown, row: typeof tableData[number]) => (
+              <Space onClick={(e) => e.stopPropagation()}>
+                <Popconfirm
+                  title={`Revoke ${row.cli?.name ?? row.slug}?`}
+                  description="Removes the CLI plus its rules and stored credential for this user."
+                  onConfirm={() => revokeCli(row.slug)}
+                >
+                  <Button size="small" danger icon={<MinusCircleOutlined />}>Revoke</Button>
+                </Popconfirm>
+              </Space>
+            ),
+          }] : []),
+        ]}
+      />
 
       {/* ===== Drawer (per-CLI editor) ===== */}
       <UserCliDrawer
