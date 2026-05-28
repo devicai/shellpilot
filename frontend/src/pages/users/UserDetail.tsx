@@ -155,6 +155,32 @@ export function UserDetailPage() {
     [policies, user],
   );
 
+  // Rows for the CLIs table: UNION of policy.clis and the distinct CLIs found
+  // in the rules — otherwise a rule whose CLI isn't listed in clis (legacy
+  // policies, shared policies without an explicit catalog set) would load but
+  // render nowhere. Wildcard rules (cli='*') get a leading 'All CLIs (*)'
+  // pseudo-row (view-only; edit wildcards in the Policy detail).
+  // Declared above the `if (!user)` guard so hook order is stable.
+  const tableData = useMemo(() => {
+    const slugs = new Set<string>(effPolicy?.clis ?? []);
+    const wild: Rule[] = [];
+    for (const r of rules) {
+      if (r.cli === '*') wild.push(r);
+      else if (r.cli) slugs.add(r.cli);
+    }
+    const rows = Array.from(slugs).map((slug) => ({
+      slug,
+      cli: cliBySlug.get(slug),
+      rules: rulesByCli.get(slug) ?? [],
+      cred: credByCli.get(slug) ?? null,
+      wildcard: false,
+    }));
+    if (wild.length) {
+      rows.unshift({ slug: '*', cli: undefined, rules: wild, cred: null, wildcard: true });
+    }
+    return rows;
+  }, [effPolicy, rules, cliBySlug, rulesByCli, credByCli]);
+
   if (!user) return null;
 
   const profile = user.profileId ? profiles.find((p) => p.id === user.profileId) : null;
@@ -260,31 +286,8 @@ export function UserDetailPage() {
     message.success('Enrollment file downloaded (single-use, expires in 24h)');
   };
 
-  // Rows are the UNION of policy.clis and the distinct CLIs found in the
-  // policy's rules — otherwise a rule for a CLI that isn't listed in clis
-  // (legacy policies, shared policies without an explicit catalog set) would
-  // load but render nowhere. Wildcard rules (cli='*') get a pseudo-row "All
-  // CLIs (*)" so they're visible too (view-only here; editing wildcards lives
-  // in the Policy detail page).
-  const tableData = useMemo(() => {
-    const slugs = new Set<string>(effPolicy?.clis ?? []);
-    const wild: Rule[] = [];
-    for (const r of rules) {
-      if (r.cli === '*') wild.push(r);
-      else if (r.cli) slugs.add(r.cli);
-    }
-    const rows = Array.from(slugs).map((slug) => ({
-      slug,
-      cli: cliBySlug.get(slug),
-      rules: rulesByCli.get(slug) ?? [],
-      cred: credByCli.get(slug) ?? null,
-      wildcard: false,
-    }));
-    if (wild.length) {
-      rows.unshift({ slug: '*', cli: undefined, rules: wild, cred: null, wildcard: true });
-    }
-    return rows;
-  }, [effPolicy, rules, cliBySlug, rulesByCli, credByCli]);
+  // Computed inline below — see the useMemo declared above the early-return
+  // guard so the hook order is stable across renders (React rules of hooks).
 
   const drawerCli = drawerSlug ? cliBySlug.get(drawerSlug) ?? null : null;
   const drawerRules = drawerSlug ? (rulesByCli.get(drawerSlug) ?? []) : [];
