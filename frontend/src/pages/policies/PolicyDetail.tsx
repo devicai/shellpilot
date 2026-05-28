@@ -7,6 +7,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { rulesApi, WEBHOOK_EVENTS, type WebhookEvent } from '../../api/endpoints/rules';
 import { clisApi } from '../../api/endpoints/clis';
 import { DecisionTag } from '../../components/PolicyTags';
+import { DefaultEffectControl } from '../../components/DefaultEffectControl';
 import type { CliCatalogItem, Decision, Enforcement, Policy, Rule } from '../../types/api';
 
 const { Title, Text } = Typography;
@@ -98,8 +99,8 @@ export function PolicyDetailPage() {
           <Form.Item name="name" label="Name" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="description" label="Description"><Input.TextArea rows={2} /></Form.Item>
           <Space size="large" style={{ display: 'flex' }}>
-            <Form.Item name="defaultEffect" label="Default effect" style={{ minWidth: 200 }}>
-              <Select options={DECISIONS.map((d) => ({ value: d, label: d }))} />
+            <Form.Item name="defaultEffect" label="Default effect">
+              <DefaultEffectControl />
             </Form.Item>
             <Form.Item name="enforcement" label="Enforcement" style={{ minWidth: 200 }}>
               <Select options={ENFORCEMENTS.map((e) => ({ value: e, label: e }))} />

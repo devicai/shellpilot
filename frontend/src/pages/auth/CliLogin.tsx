@@ -8,7 +8,7 @@ import DevicLogo from '../../assets/devic-logo.png';
 const { Title, Paragraph, Text } = Typography;
 
 /**
- * Browser landing page for `devic-cli-wrapper login` (case 2). The CLI opens
+ * Browser landing page for `shellpilot login` (case 2). The CLI opens
  * this with ?port&state pointing at its localhost callback. After the user
  * authenticates and approves, we mint a named API key and redirect the browser
  * to http://127.0.0.1:<port>/callback?key=...&state=... where the CLI captures
@@ -41,7 +41,7 @@ export function CliLoginPage() {
           <Result
             status="error"
             title="Invalid CLI login link"
-            subTitle="This page is opened by the ShellPilot CLI. Run `devic-cli-wrapper login --base-url <host>` from your terminal."
+            subTitle="This page is opened by the ShellPilot CLI. Run `shellpilot login --base-url <host>` from your terminal."
           />
         </Card>
       </div>

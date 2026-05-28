@@ -170,8 +170,8 @@ After enabling, every request must include `x-client-uid: <tenant>`. `BaseReposi
 
 ## Distributing the wrapper
 
-The `devic-cli-wrapper` Go binary ships via a public Homebrew tap
-(`brew tap devicai/tap && brew install devic-cli-wrapper`). See
+The `shellpilot` Go binary ships via a public Homebrew tap
+(`brew tap devicai/tap && brew install shellpilot`). See
 [docs/homebrew-distribution.md](docs/homebrew-distribution.md) for the layout,
 the rationale (why unsigned is fine for brew), and how to cut a new version.
 

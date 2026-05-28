@@ -45,7 +45,8 @@ function periodStart(period: StatsPeriod): Date {
 // trace POSTed when the wrapper boots its dispatcher). They drown out the
 // signal we care about — actual CLI invocations from agents — but we still keep
 // them in the DB so they can be queried explicitly via the Traces page filter.
-const EXCLUDED_FROM_DASHBOARD = ['devic-cli-wrapper', 'devic-wrapper'];
+// Includes legacy slugs so pre-v0.6 traces stay hidden after the rename too.
+const EXCLUDED_FROM_DASHBOARD = ['shellpilot', 'devic-cli-wrapper', 'devic-wrapper'];
 
 @Injectable()
 export class StatsService {
