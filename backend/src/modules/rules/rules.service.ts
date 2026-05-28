@@ -21,10 +21,22 @@ export class RulesService {
 
   // ---- Policies ----
 
-  async listPolicies(scope: ExtensionScope, opts: { limit?: number; offset?: number }): Promise<PaginatedResponse<Policy>> {
-    // The global list holds only shared policies (linked to profiles / global
-    // fallback). Per-user "individual rules" (ownerUserId set) are excluded —
-    // they're reached only from their owner's detail page (getPolicy by id).
+  async listPolicies(
+    scope: ExtensionScope,
+    opts: { limit?: number; offset?: number },
+    ownerUserId?: string,
+  ): Promise<PaginatedResponse<Policy>> {
+    // Default: only shared policies (linked to profiles / global fallback);
+    // per-user individual rules (ownerUserId set) are excluded.
+    // With ownerUserId: return THAT user's individual policies — used by the
+    // user detail page to reactivate existing individual rules rather than
+    // creating duplicates each time the user switches modes.
+    if (ownerUserId) {
+      if (!Types.ObjectId.isValid(ownerUserId)) {
+        return { data: [], pagination: { total: 0, limit: opts.limit ?? 20, offset: opts.offset ?? 0, hasMore: false } };
+      }
+      return this.policies.find({ ownerUserId: new Types.ObjectId(ownerUserId) }, scope, opts);
+    }
     return this.policies.find({ ownerUserId: { $exists: false } }, scope, opts);
   }
 

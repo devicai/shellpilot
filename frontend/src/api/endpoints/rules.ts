@@ -35,7 +35,7 @@ export interface CreateRulePayload {
 export type UpdateRulePayload = Partial<CreateRulePayload>;
 
 export const rulesApi = {
-  listPolicies: (params?: { limit?: number; offset?: number }) =>
+  listPolicies: (params?: { limit?: number; offset?: number; ownerUserId?: string }) =>
     apiClient.get<Paginated<Policy>>('/rules/policies', { params }).then((r) => r.data),
   getPolicy: (id: string) => apiClient.get<Policy>(`/rules/policies/${id}`).then((r) => r.data),
   createPolicy: (payload: CreatePolicyPayload) =>
