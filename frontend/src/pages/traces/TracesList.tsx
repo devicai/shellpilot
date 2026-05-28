@@ -5,7 +5,6 @@ import {
   Card,
   DatePicker,
   Drawer,
-  Input,
   Select,
   Space,
   Switch,
@@ -107,17 +106,31 @@ export function TracesListPage() {
 
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
-          <Input
+          <Select
+            showSearch
+            allowClear
             placeholder="CLI"
-            allowClear
-            style={{ width: 140 }}
-            onChange={(e) => setFilters((f) => ({ ...f, cli: e.target.value || undefined }))}
-          />
-          <Input
-            placeholder="User id"
-            allowClear
+            optionFilterProp="label"
             style={{ width: 220 }}
-            onChange={(e) => setFilters((f) => ({ ...f, userId: e.target.value || undefined }))}
+            value={filters.cli}
+            options={Object.values(clisBySlug).map((c) => ({
+              value: c.slug,
+              label: `${c.name} (${c.slug})`,
+            }))}
+            onChange={(v) => setFilters((f) => ({ ...f, cli: v || undefined }))}
+          />
+          <Select
+            showSearch
+            allowClear
+            placeholder="User"
+            optionFilterProp="label"
+            style={{ width: 260 }}
+            value={filters.userId}
+            options={Object.values(usersById).map((u) => ({
+              value: u.id,
+              label: u.email,
+            }))}
+            onChange={(v) => setFilters((f) => ({ ...f, userId: v || undefined }))}
           />
           <Select
             style={{ width: 200 }}

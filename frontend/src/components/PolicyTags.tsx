@@ -3,11 +3,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBan,
   faCircleCheck,
+  faCircleInfo,
   faCircleXmark,
+  faDownload,
   faEye,
   faHourglassHalf,
   faKey,
   faShieldHalved,
+  faTrashCan,
   faTriangleExclamation,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
@@ -58,6 +61,37 @@ const DECISION_META: Record<string, TagMeta> = {
     color: 'blue',
     icon: faKey,
     tip: 'JIT credential issued — the wrapper injected a short-lived credential for this invocation.',
+  },
+  // Wrapper lifecycle / runtime events (not policy decisions).
+  'already-present': {
+    color: 'blue',
+    icon: faCircleInfo,
+    tip: 'CLI was already on PATH when install was invoked — no action needed.',
+  },
+  'binary-missing': {
+    color: 'orange',
+    icon: faTriangleExclamation,
+    tip: 'Shim is in place but the real binary is gone — the CLI was likely uninstalled outside the wrapper.',
+  },
+  install: {
+    color: 'green',
+    icon: faDownload,
+    tip: 'Install snippet executed successfully — the CLI is now under the wrapper.',
+  },
+  'install-error': {
+    color: 'red',
+    icon: faCircleXmark,
+    tip: 'Install snippet failed or was not declared for this OS.',
+  },
+  uninstall: {
+    color: 'default',
+    icon: faTrashCan,
+    tip: 'Uninstall snippet executed — the CLI was removed.',
+  },
+  'uninstall-error': {
+    color: 'red',
+    icon: faCircleXmark,
+    tip: 'Uninstall snippet failed or was not declared for this OS.',
   },
 };
 
