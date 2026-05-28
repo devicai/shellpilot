@@ -175,17 +175,31 @@ export function UserDetailPage() {
   };
 
   // Direct-manipulation saves: each picker change writes and reloads. We await
-  // load() so the UI is always rendered against fresh server state, and toast
-  // so the user sees that the change landed.
+  // load() so the UI is always rendered against fresh server state, surface
+  // errors via toast (no more silent failures), and only toast success once
+  // the write actually landed.
+  const reportError = (e: unknown, fallback: string) => {
+    const err = e as { response?: { data?: { message?: string | string[] } } };
+    const m = err.response?.data?.message;
+    message.error(Array.isArray(m) ? m.join('; ') : (m ?? fallback));
+  };
   const setProfileFor = async (profileId?: string) => {
-    await usersApi.update(id, { profileId: profileId || '', policyId: '' });
-    message.success(profileId ? 'Profile assigned' : 'Profile cleared');
-    await load();
+    try {
+      await usersApi.update(id, { profileId: profileId || '', policyId: '' });
+      message.success(profileId ? 'Profile assigned' : 'Profile cleared');
+      await load();
+    } catch (e) {
+      reportError(e, 'Failed to assign profile');
+    }
   };
   const setPolicyFor = async (policyId?: string) => {
-    await usersApi.update(id, { policyId: policyId || '', profileId: '' });
-    message.success(policyId ? 'Direct policy assigned' : 'Direct policy cleared');
-    await load();
+    try {
+      await usersApi.update(id, { policyId: policyId || '', profileId: '' });
+      message.success(policyId ? 'Direct policy assigned' : 'Direct policy cleared');
+      await load();
+    } catch (e) {
+      reportError(e, 'Failed to assign policy');
+    }
   };
 
   const createIndividualRules = async () => {
