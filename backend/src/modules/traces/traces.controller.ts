@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentApiKey } from '../../common/decorators/current-api-key.decorator';
 import { Scope } from '../../common/decorators/scope.decorator';
 import { TracesService } from './traces.service';
@@ -27,7 +29,8 @@ export class TracesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
+  @Roles('admin', 'operator', 'viewer')
   @Get()
   @ApiOperation({ summary: 'List traces with filters (JWT)' })
   list(
@@ -58,7 +61,8 @@ export class TracesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
+  @Roles('admin', 'operator', 'viewer')
   @Get('stats')
   @ApiOperation({ summary: 'Aggregated stats for traces (JWT)' })
   statsEndpoint(@Scope() scope: ExtensionScope, @Query('period') period?: StatsPeriod) {
@@ -66,7 +70,8 @@ export class TracesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
+  @Roles('admin', 'operator', 'viewer')
   @Get('timeseries')
   @ApiOperation({ summary: 'Trace counts bucketed by hour/day for charts (JWT)' })
   timeseriesEndpoint(@Scope() scope: ExtensionScope, @Query('period') period?: StatsPeriod) {
@@ -74,7 +79,8 @@ export class TracesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
+  @Roles('admin', 'operator', 'viewer')
   @Get(':id')
   @ApiOperation({ summary: 'Get trace by id (JWT)' })
   findOne(@Param('id') id: string, @Scope() scope: ExtensionScope) {

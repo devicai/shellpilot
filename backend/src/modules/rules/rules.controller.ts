@@ -1,6 +1,5 @@
 import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProduces, ApiTags, ApiSecurity } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
 import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -72,7 +71,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies')
   @ApiOperation({ summary: 'Create policy' })
@@ -81,7 +80,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Put('policies/:id')
   @ApiOperation({ summary: 'Replace policy' })
@@ -90,7 +89,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies/:id/activate')
   @ApiOperation({ summary: 'Activate a policy (deactivates all others)' })
@@ -99,7 +98,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin')
   @Delete('policies/:id')
   @ApiOperation({ summary: 'Delete policy and all its rules' })
@@ -111,7 +110,7 @@ export class RulesController {
   // --- Webhook test ---
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies/:id/webhooks/:event/test')
   @ApiOperation({ summary: 'Send a test ping to a configured webhook URL' })
@@ -130,7 +129,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies/:policyId/rules')
   @ApiOperation({ summary: 'Create rule under a policy' })
@@ -139,7 +138,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Patch('rules/:id')
   @ApiOperation({ summary: 'Update rule' })
@@ -148,7 +147,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Delete('rules/:id')
   @ApiOperation({ summary: 'Delete rule' })

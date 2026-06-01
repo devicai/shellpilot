@@ -1,6 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -39,7 +38,7 @@ export class ProfilesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post()
   @ApiOperation({ summary: 'Create a profile (admin/operator)' })
@@ -48,7 +47,7 @@ export class ProfilesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Patch(':id')
   @ApiOperation({ summary: 'Update profile (admin/operator)' })
@@ -57,7 +56,7 @@ export class ProfilesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete profile (admin)' })
