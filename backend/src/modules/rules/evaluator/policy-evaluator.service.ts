@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../../../redis/redis.service';
 import { CONFIG } from '../../../config/config.loader';
 import { ShellpilotModuleConfig } from '../../../config/config.types';
+import { ExtensionScope } from '../../../interfaces';
 import { PoliciesRepository } from '../policies.repository';
 import { RulesRepository } from '../rules.repository';
 import { PolicyResolutionService } from '../policy-resolution.service';
@@ -63,14 +64,14 @@ export class PolicyEvaluatorService {
     await this.redis.del(POLICY_CACHE_PREFIX + policyId);
   }
 
-  private async loadPolicyById(policyId: string): Promise<CachedPolicy | null> {
+  private async loadPolicyById(policyId: string, scope: ExtensionScope): Promise<CachedPolicy | null> {
     const key = POLICY_CACHE_PREFIX + policyId;
     const cached = await this.redis.get(key);
     if (cached) return JSON.parse(cached) as CachedPolicy;
 
-    const policy = (await this.policies.findById(policyId, {})) as (Policy & { _id: { toString(): string } }) | null;
+    const policy = (await this.policies.findById(policyId, scope)) as (Policy & { _id: { toString(): string } }) | null;
     if (!policy) return null;
-    const rules = (await this.rulesRepo.findByPolicy(String(policy._id))) as Array<Rule & { _id: { toString(): string } }>;
+    const rules = (await this.rulesRepo.findByPolicy(String(policy._id), scope)) as Array<Rule & { _id: { toString(): string } }>;
     const payload: CachedPolicy = {
       id: String(policy._id),
       name: policy.name,
@@ -94,10 +95,18 @@ export class PolicyEvaluatorService {
    * Which policy applies: explicit override (admin/testing) → the user's
    * effective policy (per-identity) → the globally-active policy.
    */
-  private async resolvePolicyId(opts: { userId?: string; policyOverrideId?: string }): Promise<string | null> {
-    if (opts.policyOverrideId) return opts.policyOverrideId;
-    if (opts.userId) return this.resolution.resolveEffectivePolicyId(opts.userId);
-    const active = (await this.policies.findActive()) as (Policy & { _id: { toString(): string } }) | null;
+  private async resolvePolicyId(
+    opts: { userId?: string; policyOverrideId?: string },
+    scope: ExtensionScope,
+  ): Promise<string | null> {
+    // Validate an explicit override against the tenant so it can't reference (or
+    // hit the cached content of) another tenant's policy.
+    if (opts.policyOverrideId) {
+      const p = (await this.policies.findById(opts.policyOverrideId, scope)) as (Policy & { _id: { toString(): string } }) | null;
+      return p ? String(p._id) : null;
+    }
+    if (opts.userId) return this.resolution.resolveEffectivePolicyId(opts.userId, scope);
+    const active = (await this.policies.findActive(scope)) as (Policy & { _id: { toString(): string } }) | null;
     return active ? String(active._id) : null;
   }
 
@@ -123,9 +132,10 @@ export class PolicyEvaluatorService {
     cli: string,
     args: string[],
     opts: { userId?: string; policyOverrideId?: string } = {},
+    scope: ExtensionScope = {},
   ): Promise<EvaluationResult> {
-    const policyId = await this.resolvePolicyId(opts);
-    const cached = policyId ? await this.loadPolicyById(policyId) : null;
+    const policyId = await this.resolvePolicyId(opts, scope);
+    const cached = policyId ? await this.loadPolicyById(policyId, scope) : null;
 
     if (!cached) {
       return {

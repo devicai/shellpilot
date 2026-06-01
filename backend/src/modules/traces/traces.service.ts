@@ -34,7 +34,12 @@ export class TracesService {
     });
   }
 
-  async ingest(dto: CreateTraceDto, apiKeyPrefix?: string, apiKeyUserId?: string): Promise<Trace> {
+  async ingest(
+    dto: CreateTraceDto,
+    scope: ExtensionScope,
+    apiKeyPrefix?: string,
+    apiKeyUserId?: string,
+  ): Promise<Trace> {
     // Prefer the authenticated API key's identity; fall back to a body-supplied
     // userId for back-compat / non-wrapper callers.
     const ownerId = apiKeyUserId ?? dto.userId;
@@ -55,12 +60,12 @@ export class TracesService {
         exitCode: dto.exitCode,
         timestamp: dto.timestamp ? new Date(dto.timestamp) : new Date(),
       } as Partial<Trace>,
-      {},
+      scope,
     );
 
-    // Fan out to the webhook sinks. Fire-and-forget — the webhook service
-    // handles retries and never throws into the ingest path.
-    this.webhooks.emit(trace);
+    // Fan out to the webhook sinks within the same tenant. Fire-and-forget — the
+    // webhook service handles retries and never throws into the ingest path.
+    this.webhooks.emit(trace, scope);
 
     return trace;
   }

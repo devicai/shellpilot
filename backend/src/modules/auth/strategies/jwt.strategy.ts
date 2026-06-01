@@ -2,7 +2,9 @@ import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { CONFIG } from '../../../config/config.loader';
-import { ShellpilotModuleConfig } from '../../../config/config.types';
+import { ExtensionProperty, ShellpilotModuleConfig } from '../../../config/config.types';
+import { EXTENSIONS_TOKEN } from '../../../providers/extensions.provider';
+import { deriveAuthScope } from '../../../common/scope/derive-auth-scope';
 import { UsersService } from '../../users/users.service';
 import { AuthenticatedUser } from '../../../interfaces';
 import { Types } from 'mongoose';
@@ -17,6 +19,7 @@ interface JwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     @Inject(CONFIG) config: ShellpilotModuleConfig,
+    @Inject(EXTENSIONS_TOKEN) private readonly extensions: ExtensionProperty[],
     private readonly users: UsersService,
   ) {
     super({
@@ -37,6 +40,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user || !user.active) {
       throw new UnauthorizedException('User no longer active');
     }
-    return { id: String(user._id), email: user.email, role: user.role, name: user.name };
+    return {
+      id: String(user._id),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      scope: deriveAuthScope(user, this.extensions),
+    };
   }
 }

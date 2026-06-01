@@ -19,6 +19,8 @@ export interface AuthenticatedUser {
   email: string;
   role: 'admin' | 'operator' | 'viewer';
   name?: string;
+  /** Extension values (e.g. clientUID) carried by this principal; pins the tenant. */
+  scope?: ExtensionScope;
 }
 
 export interface AuthenticatedApiKey {
@@ -26,6 +28,8 @@ export interface AuthenticatedApiKey {
   prefix: string;
   userId: string;
   scopes: string[];
+  /** Extension values (e.g. clientUID) carried by this principal; pins the tenant. */
+  scope?: ExtensionScope;
 }
 
 export interface AuthenticatedRequest extends Request {

@@ -21,9 +21,9 @@ export class TracesController {
   @UseGuards(ApiKeyAuthGuard)
   @Post()
   @ApiOperation({ summary: 'Ingest a trace event (consumed by the Go wrapper)' })
-  ingest(@Body() dto: CreateTraceDto, @CurrentApiKey() apiKey?: AuthenticatedApiKey) {
-    // Attribute the trace to the API key's identity, not a client-supplied id.
-    return this.service.ingest(dto, apiKey?.prefix, apiKey?.userId);
+  ingest(@Body() dto: CreateTraceDto, @Scope() scope: ExtensionScope, @CurrentApiKey() apiKey?: AuthenticatedApiKey) {
+    // Attribute the trace to the API key's identity (and tenant), not a client-supplied id.
+    return this.service.ingest(dto, scope, apiKey?.prefix, apiKey?.userId);
   }
 
   @ApiBearerAuth()
@@ -61,16 +61,16 @@ export class TracesController {
   @UseGuards(JwtAuthGuard)
   @Get('stats')
   @ApiOperation({ summary: 'Aggregated stats for traces (JWT)' })
-  statsEndpoint(@Query('period') period?: StatsPeriod) {
-    return this.stats.aggregate(period ?? '24h');
+  statsEndpoint(@Scope() scope: ExtensionScope, @Query('period') period?: StatsPeriod) {
+    return this.stats.aggregate(period ?? '24h', scope);
   }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('timeseries')
   @ApiOperation({ summary: 'Trace counts bucketed by hour/day for charts (JWT)' })
-  timeseriesEndpoint(@Query('period') period?: StatsPeriod) {
-    return this.stats.timeseries(period ?? '24h');
+  timeseriesEndpoint(@Scope() scope: ExtensionScope, @Query('period') period?: StatsPeriod) {
+    return this.stats.timeseries(period ?? '24h', scope);
   }
 
   @ApiBearerAuth()

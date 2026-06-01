@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, Form, Input, Button, Typography, Alert, Result, Space } from 'antd';
 import { useAuth } from '../../context/AuthContext';
@@ -16,7 +16,7 @@ const { Title, Paragraph, Text } = Typography;
  */
 export function CliLoginPage() {
   const [params] = useSearchParams();
-  const { user, login } = useAuth();
+  const { user, login, publicConfig } = useAuth();
 
   const port = params.get('port') ?? '';
   const state = params.get('state') ?? '';
@@ -28,6 +28,27 @@ export function CliLoginPage() {
   const [approved, setApproved] = useState(false);
 
   const invalid = !portValid || !state;
+
+  // External-only deployments delegate the login to the identity provider. Bounce
+  // there carrying the CLI's loopback port/state so the flow returns to the wrapper.
+  const providers = publicConfig?.auth.providers ?? ['local'];
+  const externalLoginUrl = publicConfig?.auth.externalLoginUrl ?? null;
+  const externalOnly = providers.includes('external-jwt') && !providers.includes('local');
+
+  useEffect(() => {
+    if (invalid || !externalOnly || !externalLoginUrl) return;
+    let target: string;
+    try {
+      const u = new URL(externalLoginUrl);
+      u.searchParams.set('port', port);
+      u.searchParams.set('state', state);
+      target = u.toString();
+    } catch {
+      const sep = externalLoginUrl.includes('?') ? '&' : '?';
+      target = `${externalLoginUrl}${sep}port=${encodeURIComponent(port)}&state=${encodeURIComponent(state)}`;
+    }
+    window.location.href = target;
+  }, [invalid, externalOnly, externalLoginUrl, port, state]);
 
   const wrap = useMemo(
     () => ({ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }),

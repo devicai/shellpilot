@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { BaseRepository } from '../../repositories/base.repository';
 import { EXTENSIONS_TOKEN } from '../../providers/extensions.provider';
 import { ExtensionProperty } from '../../config/config.types';
+import { ExtensionScope } from '../../interfaces';
 import { Cli } from './schema/cli.schema';
 
 @Injectable()
@@ -15,7 +16,7 @@ export class ClisRepository extends BaseRepository<Cli> {
     super(model, Cli.name, extensions);
   }
 
-  async findBySlug(slug: string): Promise<Cli | null> {
-    return this.model.findOne({ slug: slug.toLowerCase() }).exec();
+  async findBySlug(slug: string, scope: ExtensionScope = {}): Promise<Cli | null> {
+    return this.model.findOne(this.applyScope({ slug: slug.toLowerCase() }, scope)).exec();
   }
 }

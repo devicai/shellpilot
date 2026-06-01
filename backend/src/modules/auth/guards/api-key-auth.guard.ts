@@ -24,6 +24,7 @@ export class ApiKeyAuthGuard implements CanActivate {
       prefix: result.apiKey.prefix,
       userId: String((result.apiKey.userId as unknown as Types.ObjectId) ?? ''),
       scopes: result.apiKey.scopes,
+      scope: result.scope,
     };
     return true;
   }

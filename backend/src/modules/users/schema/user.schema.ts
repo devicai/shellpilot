@@ -16,8 +16,19 @@ export class User {
   @Prop({ required: true, unique: true, index: true, lowercase: true, trim: true })
   email!: string;
 
-  @Prop({ required: true })
-  passwordHash!: string;
+  // Optional: only `local` users have a password. Users provisioned by an
+  // external identity provider (external-jwt) and service accounts authenticate
+  // without one, so password login is impossible for them by construction.
+  @Prop()
+  passwordHash?: string;
+
+  // Stable identifier of this principal at an external identity provider (the
+  // claim configured in auth.providers.externalJwt.claimMapping.externalUserId),
+  // or the id of the consuming entity for a service account. Absent for purely
+  // local users. Unique per tenant — see the partial index applied at boot
+  // alongside the clientUID-style scope extensions (applyExternalIdentityIndex).
+  @Prop({ trim: true })
+  externalUserId?: string;
 
   @Prop({ required: true, trim: true })
   name!: string;

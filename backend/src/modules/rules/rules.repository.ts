@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { BaseRepository } from '../../repositories/base.repository';
 import { EXTENSIONS_TOKEN } from '../../providers/extensions.provider';
 import { ExtensionProperty } from '../../config/config.types';
+import { ExtensionScope } from '../../interfaces';
 import { Rule } from './schema/rule.schema';
 
 @Injectable()
@@ -15,14 +16,14 @@ export class RulesRepository extends BaseRepository<Rule> {
     super(model, Rule.name, extensions);
   }
 
-  async findByPolicy(policyId: string): Promise<Rule[]> {
+  async findByPolicy(policyId: string, scope: ExtensionScope = {}): Promise<Rule[]> {
     return this.model
-      .find({ policyId: new Types.ObjectId(policyId) })
+      .find(this.applyScope({ policyId: new Types.ObjectId(policyId) }, scope))
       .sort({ priority: -1, createdAt: 1 })
       .exec();
   }
 
-  async deleteByPolicy(policyId: string): Promise<void> {
-    await this.model.deleteMany({ policyId: new Types.ObjectId(policyId) }).exec();
+  async deleteByPolicy(policyId: string, scope: ExtensionScope = {}): Promise<void> {
+    await this.model.deleteMany(this.applyScope({ policyId: new Types.ObjectId(policyId) }, scope)).exec();
   }
 }

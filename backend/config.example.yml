@@ -32,6 +32,35 @@ auth:
     adminPassword: ${BOOTSTRAP_ADMIN_PASSWORD:-changeme}
   apiKeyPrefix: shp_
 
+  # --- Authentication providers ---
+  # `local` (email/password → own JWT) is the standalone default. `externalJwt`
+  # validates tokens minted by an external identity provider via its JWKS endpoint,
+  # mapping the token's user/tenant claims onto a federated principal. Both can be
+  # enabled at once. Omit this block entirely for plain local auth.
+  providers:
+    local:
+      enabled: true
+    externalJwt:
+      enabled: ${AUTH_EXTERNAL_JWT_ENABLED:-false}
+      jwksUri: ${AUTH_EXTERNAL_JWKS_URI:-}
+      issuer: ${AUTH_EXTERNAL_ISSUER:-}
+      audience: ${AUTH_EXTERNAL_AUDIENCE:-}
+      # Map the external token's claims onto the local principal. `externalUserId`
+      # is the stable per-user key (unique per tenant); `clientUID` carries the
+      # tenant and is matched against the scope extension of the same name.
+      claimMapping:
+        externalUserId: sub
+        clientUID: client_uid
+      # When enabled, a valid external token provisions its local user just-in-time
+      # (no password) and exposes POST /users/sso-upsert; the user starts with their
+      # own private rules. Pair with the clientUID extension below for multi-tenancy.
+
+  # --- CLI login flow ---
+  # Empty → the local SPA login is served (default flow). Set to an external login
+  # URL to bounce the browser there instead (the SPA reads this via /public-config).
+  cliLogin:
+    redirectTo: ${AUTH_CLI_LOGIN_REDIRECT_TO:-}
+
 # AES-256-GCM master key for credential storage.
 # Generate with: openssl rand -base64 32
 secrets:

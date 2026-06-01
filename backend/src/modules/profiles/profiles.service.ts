@@ -11,7 +11,7 @@ export class ProfilesService {
   constructor(private readonly repo: ProfilesRepository) {}
 
   async create(dto: CreateProfileDto, scope: ExtensionScope): Promise<Profile> {
-    const existing = await this.repo.findByName(dto.name);
+    const existing = await this.repo.findByName(dto.name, scope);
     if (existing) throw new ConflictException(`Profile '${dto.name}' already exists`);
     return this.repo.create(
       {

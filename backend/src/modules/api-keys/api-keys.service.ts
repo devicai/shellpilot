@@ -3,8 +3,10 @@ import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { CONFIG } from '../../config/config.loader';
-import { ShellpilotModuleConfig } from '../../config/config.types';
+import { ExtensionProperty, ShellpilotModuleConfig } from '../../config/config.types';
 import { AuthenticatedUser, ExtensionScope, PaginatedResponse } from '../../interfaces';
+import { EXTENSIONS_TOKEN } from '../../providers/extensions.provider';
+import { deriveAuthScope } from '../../common/scope/derive-auth-scope';
 import { ApiKeysRepository } from './api-keys.repository';
 import { ApiKey } from './schema/api-key.schema';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
@@ -31,6 +33,7 @@ export class ApiKeysService {
     private readonly repo: ApiKeysRepository,
     private readonly users: UsersService,
     @Inject(CONFIG) private readonly config: ShellpilotModuleConfig,
+    @Inject(EXTENSIONS_TOKEN) private readonly extensions: ExtensionProperty[],
   ) {}
 
   private randomToken(): { prefix: string; secret: string; token: string } {
@@ -56,7 +59,7 @@ export class ApiKeysService {
     // Target another user either by id or by email; only admins may.
     const targetRef = dto.userId ?? dto.email;
     if (targetRef) {
-      const resolvedId = await this.resolveUserId(targetRef);
+      const resolvedId = await this.resolveUserId(targetRef, scope);
       if (resolvedId !== actor.id && actor.role !== 'admin') {
         throw new ForbiddenException('Only admins can create API keys for other users');
       }
@@ -104,13 +107,13 @@ export class ApiKeysService {
     };
   }
 
-  /** Resolve a user reference (Mongo id or email) to a user id. */
-  async resolveUserId(idOrEmail: string): Promise<string> {
+  /** Resolve a user reference (Mongo id or email) to a user id, within a tenant. */
+  async resolveUserId(idOrEmail: string, scope: ExtensionScope = {}): Promise<string> {
     if (Types.ObjectId.isValid(idOrEmail)) {
-      const byId = await this.users.findById(idOrEmail, {}).catch(() => null);
+      const byId = await this.users.findById(idOrEmail, scope).catch(() => null);
       if (byId) return idOrEmail;
     }
-    const byEmail = await this.users.findByEmail(idOrEmail);
+    const byEmail = await this.users.findByEmail(idOrEmail, scope);
     if (!byEmail) throw new NotFoundException(`No user or service account '${idOrEmail}'`);
     return String((byEmail as unknown as { _id: Types.ObjectId })._id);
   }
@@ -151,9 +154,14 @@ export class ApiKeysService {
     await this.repo.deleteById(id, scope);
   }
 
-  async verify(rawToken: string): Promise<{ apiKey: ApiKey; id: string } | null> {
+  async verify(
+    rawToken: string,
+  ): Promise<{ apiKey: ApiKey; id: string; scope: ExtensionScope } | null> {
     const parsed = this.parseToken(rawToken);
     if (!parsed) return null;
+    // Resolve by prefix globally — the prefix is unique across tenants and the
+    // tenant is not yet known. The resolved key's own extension values then pin
+    // the request's tenant for everything downstream.
     const key = (await this.repo.findByPrefix(parsed.prefix)) as (ApiKey & { _id: Types.ObjectId }) | null;
     if (!key) return null;
     if (key.expiresAt && key.expiresAt.getTime() < Date.now()) return null;
@@ -161,6 +169,6 @@ export class ApiKeysService {
     if (!ok) return null;
     const id = String(key._id);
     await this.repo.touchLastUsed(id);
-    return { apiKey: key, id };
+    return { apiKey: key, id, scope: deriveAuthScope(key, this.extensions) };
   }
 }

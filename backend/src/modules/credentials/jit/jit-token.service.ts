@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { RedisService } from '../../../redis/redis.service';
 import { CONFIG } from '../../../config/config.loader';
 import { ShellpilotModuleConfig } from '../../../config/config.types';
+import { ExtensionScope } from '../../../interfaces';
 import { CliAuthMode, OsPath } from '../../clis-catalog/schema/cli.schema';
 
 const PREFIX = 'shellpilot:jit:';
@@ -29,6 +30,9 @@ export interface JitPayload {
   postProcess?: Array<Record<string, unknown>>;
   delivery?: Array<Record<string, unknown>>;
   commandPath?: string[];
+  // Tenant scope of the issuer; checked at verify so a token cannot be consumed
+  // cross-tenant even if its high-entropy value leaks.
+  scope?: ExtensionScope;
   issuedAt: number;
 }
 

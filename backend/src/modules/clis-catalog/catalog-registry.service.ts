@@ -129,7 +129,7 @@ export class CatalogRegistryService {
     };
     const payload: Partial<Cli> = { ...detail.cli, source };
 
-    const existing = await this.repo.findBySlug(slugLc);
+    const existing = await this.repo.findBySlug(slugLc, scope);
     if (existing && !overwrite) {
       throw new ConflictException(`'${slugLc}' already exists — pass overwrite=true to update it`);
     }

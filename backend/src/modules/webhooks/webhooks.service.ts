@@ -4,6 +4,7 @@ import { PoliciesRepository } from '../rules/policies.repository';
 import { Policy, WebhookEvent, WEBHOOK_EVENTS } from '../rules/schema/policy.schema';
 import { TraceDecision } from '../traces/dto/create-trace.dto';
 import { Trace } from '../traces/schema/trace.schema';
+import { ExtensionScope } from '../../interfaces';
 
 // Maps a trace decision into the webhook event key the policy uses to look up
 // a URL. Decisions that don't have an event (allow / install / uninstall /
@@ -29,7 +30,7 @@ export class WebhooksService {
    * happens on the event loop without blocking the trace ingest path. This is
    * intentional — a downstream Slack hook hiccup must never delay a CLI invocation.
    */
-  emit(trace: Trace): void {
+  emit(trace: Trace, scope: ExtensionScope = {}): void {
     // Map decision → event up front so we don't even hit the DB for traces
     // that have no webhook event. allow / install / uninstall noise stays out.
     const event = DECISION_TO_EVENT[trace.decision];
@@ -37,7 +38,7 @@ export class WebhooksService {
 
     // Defer the actual send so the caller (TracesService.ingest) returns
     // promptly. The fire path runs unawaited; errors land in the logger.
-    void this.dispatch(event, trace).catch((err) => {
+    void this.dispatch(event, trace, scope).catch((err) => {
       this.logger.warn(`webhook dispatch failed: ${(err as Error).message}`);
     });
   }
@@ -48,11 +49,15 @@ export class WebhooksService {
    * response (status / first 200 chars of body) so admins can confirm signing
    * and delivery without waiting for a real trace.
    */
-  async testEvent(policyId: string, event: WebhookEvent): Promise<{ status: number; body: string }> {
+  async testEvent(
+    policyId: string,
+    event: WebhookEvent,
+    scope: ExtensionScope = {},
+  ): Promise<{ status: number; body: string }> {
     if (!WEBHOOK_EVENTS.includes(event)) {
       throw new BadRequestException(`unknown event ${event}`);
     }
-    const policy = (await this.policies.findById(policyId, {})) as Policy & { _id?: unknown };
+    const policy = (await this.policies.findById(policyId, scope)) as Policy & { _id?: unknown };
     if (!policy) throw new NotFoundException('Policy not found');
     const url = (policy.webhooks ?? {})[event];
     if (!url) throw new BadRequestException(`Policy has no ${event} URL configured`);
@@ -89,8 +94,8 @@ export class WebhooksService {
     }
   }
 
-  private async dispatch(event: WebhookEvent, trace: Trace): Promise<void> {
-    const policy = await this.policies.findActive();
+  private async dispatch(event: WebhookEvent, trace: Trace, scope: ExtensionScope = {}): Promise<void> {
+    const policy = await this.policies.findActive(scope);
     if (!policy) return;
     const url = (policy.webhooks ?? {})[event];
     if (!url) return;

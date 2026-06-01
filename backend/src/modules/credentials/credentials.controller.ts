@@ -53,16 +53,20 @@ export class CredentialsController {
   @UseGuards(ApiKeyAuthGuard)
   @Post('issue')
   @ApiOperation({ summary: "Issue a JIT token bound to the API key's identity + cli (Go wrapper)" })
-  issue(@Body() dto: IssueCredentialDto, @CurrentApiKey() apiKey: AuthenticatedApiKey) {
+  issue(
+    @Body() dto: IssueCredentialDto,
+    @CurrentApiKey() apiKey: AuthenticatedApiKey,
+    @Scope() scope: ExtensionScope,
+  ) {
     // Identity comes from the key, never the body.
-    return this.service.issue({ ...dto, userId: apiKey.userId });
+    return this.service.issue({ ...dto, userId: apiKey.userId }, scope);
   }
 
   @ApiSecurity('x-api-key')
   @UseGuards(ApiKeyAuthGuard)
   @Post('verify')
   @ApiOperation({ summary: 'Consume a JIT token and resolve the underlying secret ONCE' })
-  verify(@Body() dto: VerifyCredentialDto) {
-    return this.service.verify(dto);
+  verify(@Body() dto: VerifyCredentialDto, @Scope() scope: ExtensionScope) {
+    return this.service.verify(dto, scope);
   }
 }

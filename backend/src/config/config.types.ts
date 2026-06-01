@@ -42,6 +42,48 @@ export interface AuthConfig {
     adminPassword: string;
   };
   apiKeyPrefix: string;
+  // Pluggable authentication providers. `local` (email/password → own JWT) is the
+  // default standalone behaviour. `externalJwt` validates tokens minted by an
+  // external identity provider via its JWKS endpoint; both can coexist.
+  providers: AuthProvidersConfig;
+  // CLI login behaviour. When `redirectTo` is empty the local SPA login is served
+  // (default). When set, the browser flow is bounced to that external login URL.
+  cliLogin: CliLoginConfig;
+}
+
+export type AuthProviderName = 'local' | 'external-jwt';
+
+export interface AuthProvidersConfig {
+  local: LocalAuthProviderConfig;
+  externalJwt: ExternalJwtProviderConfig;
+}
+
+export interface LocalAuthProviderConfig {
+  enabled: boolean;
+}
+
+export interface ExternalJwtProviderConfig {
+  enabled: boolean;
+  // JWKS endpoint of the external identity provider (e.g. https://id.example.com/.well-known/jwks.json).
+  jwksUri?: string;
+  // Expected `iss` claim.
+  issuer?: string;
+  // Expected `aud` claim (this service's client id at the external provider).
+  audience?: string;
+  // Maps external token claims onto ShellPilot principal fields.
+  claimMapping: ClaimMapping;
+}
+
+export interface ClaimMapping {
+  // Claim carrying the stable external user id. Default 'sub'.
+  externalUserId: string;
+  // Claim carrying the tenant identifier (matched against the clientUID extension). Default 'client_uid'.
+  clientUID: string;
+}
+
+export interface CliLoginConfig {
+  // Empty → serve the local SPA login. Non-empty → external login URL to bounce to.
+  redirectTo: string;
 }
 
 export interface SecretsConfig {
