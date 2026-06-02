@@ -76,7 +76,8 @@ export class AuthController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiSecurity('x-api-key')
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin')
   @Post('enrollment')
   @ApiOperation({ summary: 'Admin: generate a single-use enrollment token for a user (case 3)' })
@@ -85,6 +86,9 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
     @Scope() scope: ExtensionScope,
   ) {
+    // Accepts a JWT admin or a trusted caller acting as an admin (act-as scope):
+    // either way RolesGuard has asserted the principal is an admin and the guard
+    // attached it to `req.user`, so `user.id` is the authorising admin's id.
     return this.cliAuth.generateEnrollment(dto.userId, user.id, scope);
   }
 
