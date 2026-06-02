@@ -8,6 +8,7 @@ import {
   ProvisionServiceAccountDto,
   GenerateEnrollmentDto,
   EnrollDto,
+  MintCliKeyDto,
 } from './dto/cli-auth.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -73,6 +74,24 @@ export class AuthController {
   ) {
     if (user) return { id: user.id, email: user.email, name: user.name };
     return this.cliAuth.whoami(apiKey!.userId, scope);
+  }
+
+  @ApiBearerAuth()
+  @ApiSecurity('x-api-key')
+  @UseGuards(JwtOrApiKeyGuard)
+  @Post('cli-key')
+  @ApiOperation({ summary: 'Mint a per-device API key for the authenticated user (browser login, case 2)' })
+  mintCliKey(
+    @Body() dto: MintCliKeyDto,
+    @Scope() scope: ExtensionScope,
+    @CurrentUser() user?: AuthenticatedUser,
+    @CurrentApiKey() apiKey?: AuthenticatedApiKey,
+  ) {
+    // The caller is whoever the guard authenticated: a JWT user, a user a trusted
+    // BFF is acting as (act-as), or the owner of the raw API key. In every case
+    // the key is minted for that same identity — never for someone else.
+    const callerId = user?.id ?? apiKey!.userId;
+    return this.cliAuth.mintSelf(callerId, dto.name, scope);
   }
 
   @ApiBearerAuth()

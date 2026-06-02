@@ -32,6 +32,14 @@ export class ProvisionServiceAccountDto {
   name?: string;
 }
 
+/** Case 2 — browser login: the authenticated user mints a key for themselves. */
+export class MintCliKeyDto {
+  @ApiPropertyOptional({ description: 'Name for the issued key (defaults to cli-login-<date>)' })
+  @IsOptional()
+  @IsString()
+  name?: string;
+}
+
 /** Case 3a — admin generates an enrollment token for a user. */
 export class GenerateEnrollmentDto {
   @ApiProperty({ description: 'User the enrollment file will authenticate as' })

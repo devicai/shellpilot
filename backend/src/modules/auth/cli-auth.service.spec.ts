@@ -80,3 +80,37 @@ describe('CliAuthService.provisionServiceAccount', () => {
     );
   });
 });
+
+describe('CliAuthService.mintSelf', () => {
+  function makeSelfUsers() {
+    const me = { _id: new Types.ObjectId(), email: 'me@example.com', name: 'Me', role: 'viewer' };
+    return { me, findById: jest.fn(async () => me) };
+  }
+
+  it('mints a key for the caller themselves, scoped to their tenant, with no admin check', async () => {
+    const users = makeSelfUsers();
+    const apiKeys = makeApiKeys();
+    const service = new CliAuthService({} as never, apiKeys as never, users as never);
+    const scope = { clientUID: 'acme' };
+    const callerId = String(users.me._id);
+
+    const result = await service.mintSelf(callerId, 'my-laptop', scope);
+
+    // Resolved within the request tenant scope (not the empty admin-check scope).
+    expect(users.findById).toHaveBeenCalledWith(callerId, scope);
+    expect(apiKeys.mintForUser).toHaveBeenCalledWith(callerId, 'my-laptop', [], undefined, scope);
+    expect(result).toEqual({
+      apiKey: 'shp_minted.secret',
+      user: { id: callerId, email: 'me@example.com', name: 'Me' },
+    });
+  });
+
+  it('defaults the key name to cli-login-<date> when none is given', async () => {
+    const users = makeSelfUsers();
+    const apiKeys = makeApiKeys();
+    const service = new CliAuthService({} as never, apiKeys as never, users as never);
+    await service.mintSelf(String(users.me._id), undefined, {});
+    const name = (apiKeys.mintForUser.mock.calls[0] as unknown[])[1] as string;
+    expect(name).toMatch(/^cli-login-\d{4}-\d{2}-\d{2}$/);
+  });
+});

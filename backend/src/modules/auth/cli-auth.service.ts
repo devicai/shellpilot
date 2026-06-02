@@ -24,9 +24,10 @@ export interface MintedCredential {
  * Backs the three CLI authentication flows. The common outcome is a named,
  * per-device API key for a user — the only credential the wrapper stores.
  *   - provision        (case 1): admin mints a key for a service account directly.
+ *   - mintSelf         (case 2): the authenticated user mints a per-device key
+ *     for themselves (browser login flow; no admin required).
  *   - generate/redeem  (case 3): admin emits a single-use enrollment token; the
  *     employee redeems it (authorised by an admin API key) for a real key.
- * (Case 2, browser login, mints via the JWT `POST /api-keys` from the frontend.)
  */
 @Injectable()
 export class CliAuthService {
@@ -83,6 +84,27 @@ export class CliAuthService {
       scope,
     );
     return { apiKey: issued.token, user: this.publicUser(sa) };
+  }
+
+  /**
+   * Case 2 — browser login: the authenticated user mints a per-device API key
+   * for themselves. No admin check — anyone may issue their own key; the guard
+   * has already verified the caller's identity (`callerUserId` is that user).
+   */
+  async mintSelf(
+    callerUserId: string,
+    name: string | undefined,
+    scope: ExtensionScope = {},
+  ): Promise<MintedCredential> {
+    const user = await this.users.findById(callerUserId, scope);
+    const issued = await this.apiKeys.mintForUser(
+      callerUserId,
+      name?.trim() || `cli-login-${this.today()}`,
+      [],
+      undefined,
+      scope,
+    );
+    return { apiKey: issued.token, user: this.publicUser(user) };
   }
 
   /** Case 3a — admin generates a single-use enrollment token for a user. */

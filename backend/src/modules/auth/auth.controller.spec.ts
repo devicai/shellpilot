@@ -34,4 +34,13 @@ describe('AuthController — guard wiring', () => {
   it('whoami accepts both a JWT and an API key', () => {
     expect(guardsOf(proto.whoami)).toContain(JwtOrApiKeyGuard);
   });
+
+  it('cli-key minting accepts a JWT, an act-as caller or a raw key, with no role gate', () => {
+    // Browser login (case 2): any authenticated user mints a key for themselves,
+    // so there is no RolesGuard — JwtOrApiKeyGuard alone.
+    expect(guardsOf(proto.mintCliKey)).toContain(JwtOrApiKeyGuard);
+    expect(guardsOf(proto.mintCliKey)).not.toContain(RolesGuard);
+    expect(guardsOf(proto.mintCliKey)).not.toContain(ApiKeyAuthGuard);
+    expect(Reflect.getMetadata(ROLES_KEY, proto.mintCliKey)).toBeUndefined();
+  });
 });
