@@ -18,6 +18,7 @@ import { ExtensionScope } from '../../interfaces';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { EnsureUserDto } from './dto/ensure-user.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('Users')
@@ -46,6 +47,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Create a user (admin)' })
   create(@Body() dto: CreateUserDto, @Scope() scope: ExtensionScope) {
     return this.service.create(dto, scope);
+  }
+
+  @Post('ensure')
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'Find-or-create a passwordless user by external identity (admin)',
+  })
+  ensure(@Body() dto: EnsureUserDto, @Scope() scope: ExtensionScope) {
+    return this.service.ssoUpsert(dto, scope);
   }
 
   @Get(':id')

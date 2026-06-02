@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CurrentApiKey } from '../../common/decorators/current-api-key.decorator';
@@ -17,17 +17,17 @@ export class CredentialsController {
   constructor(private readonly service: CredentialsService) {}
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard)
   @Post('store')
-  @ApiOperation({ summary: 'Store an encrypted credential (JWT)' })
+  @ApiOperation({ summary: 'Store an encrypted credential (JWT or trusted service caller)' })
   store(@Body() dto: StoreCredentialDto, @CurrentUser() user: AuthenticatedUser, @Scope() scope: ExtensionScope) {
     return this.service.store(dto, user, scope);
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard)
   @Get()
-  @ApiOperation({ summary: 'List credentials metadata (JWT — secrets never returned)' })
+  @ApiOperation({ summary: 'List credentials metadata (JWT or trusted service caller — secrets never returned)' })
   list(
     @CurrentUser() user: AuthenticatedUser,
     @Scope() scope: ExtensionScope,
@@ -41,9 +41,9 @@ export class CredentialsController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtOrApiKeyGuard)
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a stored credential (JWT)' })
+  @ApiOperation({ summary: 'Delete a stored credential (JWT or trusted service caller)' })
   async remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser, @Scope() scope: ExtensionScope) {
     await this.service.delete(id, user, scope);
     return { status: 'ok' };
