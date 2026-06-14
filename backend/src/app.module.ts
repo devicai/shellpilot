@@ -3,7 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { loadConfig } from './config/config.loader';
 import { ConfigModule } from './config/config.module';
-import { applyExtensions } from './providers/extensions.provider';
+import { applyExtensions, applyExternalIdentityIndex } from './providers/extensions.provider';
 import { ExtensionScopeInterceptor } from './interceptors/extension-scope.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthModule } from './health/health.module';
@@ -16,6 +16,7 @@ import { RulesModule } from './modules/rules/rules.module';
 import { CredentialsModule } from './modules/credentials/credentials.module';
 import { TracesModule } from './modules/traces/traces.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
+import { PublicConfigModule } from './modules/public-config/public-config.module';
 
 import { UserSchema } from './modules/users/schema/user.schema';
 import { ApiKeySchema } from './modules/api-keys/schema/api-key.schema';
@@ -30,6 +31,8 @@ const config = loadConfig();
 
 // Apply extensions to schemas BEFORE model registration.
 applyExtensions(UserSchema, 'User', config.extensions.properties);
+// External-identity binding unique per tenant (partial: only SSO/service users).
+applyExternalIdentityIndex(UserSchema, 'User', config.extensions.properties);
 applyExtensions(ApiKeySchema, 'ApiKey', config.extensions.properties);
 applyExtensions(CliSchema, 'Cli', config.extensions.properties);
 applyExtensions(PolicySchema, 'Policy', config.extensions.properties);
@@ -44,6 +47,7 @@ applyExtensions(ProfileSchema, 'Profile', config.extensions.properties);
     MongooseModule.forRoot(config.database.uri),
     RedisModule,
     HealthModule,
+    PublicConfigModule,
     UsersModule,
     ApiKeysModule,
     AuthModule,

@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { BaseRepository } from '../../repositories/base.repository';
 import { EXTENSIONS_TOKEN } from '../../providers/extensions.provider';
 import { ExtensionProperty } from '../../config/config.types';
+import { ExtensionScope } from '../../interfaces';
 import { User } from './schema/user.schema';
 
 @Injectable()
@@ -15,8 +16,20 @@ export class UsersRepository extends BaseRepository<User> {
     super(model, User.name, extensions);
   }
 
-  async findByEmail(email: string): Promise<User | null> {
-    return this.model.findOne({ email: email.toLowerCase() }).exec();
+  // Optional scope: callers within a tenant (duplicate checks, reference
+  // resolution) pass it so email is unique per tenant. Local login passes none
+  // (bootstrap/standalone admin is global by design).
+  async findByEmail(email: string, scope: ExtensionScope = {}): Promise<User | null> {
+    return this.model.findOne(this.applyScope({ email: email.toLowerCase() }, scope)).exec();
+  }
+
+  // Resolve a user by their external identity binding within a tenant. Used by
+  // SSO upsert (external-jwt) and service-account provisioning.
+  async findByExternalUserId(
+    externalUserId: string,
+    scope: ExtensionScope = {},
+  ): Promise<User | null> {
+    return this.model.findOne(this.applyScope({ externalUserId }, scope)).exec();
   }
 
   async countAll(): Promise<number> {

@@ -59,7 +59,7 @@ export class ClisImportExportService {
       try {
         const cli = this.normalizeEntry(raw);
         const slug = cli.slug as string; // normalizeEntry guarantees presence
-        const existing = await this.repo.findBySlug(slug);
+        const existing = await this.repo.findBySlug(slug, scope);
         if (existing && !opts.overwrite) {
           summary.skipped.push({ slug, reason: 'already exists (use overwrite=true)' });
           continue;

@@ -1,7 +1,48 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import * as yaml from 'js-yaml';
-import { ShellpilotModuleConfig } from './config.types';
+import { AuthProvidersConfig, CliLoginConfig, ShellpilotModuleConfig } from './config.types';
+
+/**
+ * Fills auth provider + CLI-login defaults. Pure (no IO) so it stays unit-testable
+ * and guarantees that a config WITHOUT these blocks behaves exactly like before:
+ * `local` enabled, `external-jwt` disabled, CLI login served locally.
+ */
+export function resolveAuthProviders(rawAuth: unknown): {
+  providers: AuthProvidersConfig;
+  cliLogin: CliLoginConfig;
+} {
+  const auth = (rawAuth ?? {}) as Record<string, any>;
+  const providersRaw = (auth.providers ?? {}) as Record<string, any>;
+  const externalRaw = (providersRaw.externalJwt ?? {}) as Record<string, any>;
+  const claimRaw = (externalRaw.claimMapping ?? {}) as Record<string, any>;
+  const cliLoginRaw = (auth.cliLogin ?? {}) as Record<string, any>;
+
+  const externalEnabled = externalRaw.enabled === true;
+  if (externalEnabled && (!externalRaw.jwksUri || !externalRaw.issuer)) {
+    throw new Error(
+      'auth.providers.externalJwt is enabled but missing jwksUri and/or issuer. ' +
+        'Both are required to validate external tokens.',
+    );
+  }
+
+  return {
+    providers: {
+      local: { enabled: providersRaw.local?.enabled ?? true },
+      externalJwt: {
+        enabled: externalEnabled,
+        jwksUri: externalRaw.jwksUri || undefined,
+        issuer: externalRaw.issuer || undefined,
+        audience: externalRaw.audience || undefined,
+        claimMapping: {
+          externalUserId: claimRaw.externalUserId ?? 'sub',
+          clientUID: claimRaw.clientUID ?? 'client_uid',
+        },
+      },
+    },
+    cliLogin: { redirectTo: cliLoginRaw.redirectTo ?? '' },
+  };
+}
 
 const ENV_VAR_PATTERN = /\$\{([^}:-]+)(?::-(.*?))?\}/g;
 
@@ -57,6 +98,9 @@ export function loadConfig(configPath?: string): ShellpilotModuleConfig {
   }
 
   resolved.auth.apiKeyPrefix = resolved.auth.apiKeyPrefix ?? 'shp_';
+  const { providers, cliLogin } = resolveAuthProviders(resolved.auth);
+  resolved.auth.providers = providers;
+  resolved.auth.cliLogin = cliLogin;
   resolved.jit = resolved.jit ?? { ttlSeconds: 60 };
   resolved.shellpilot = resolved.shellpilot ?? {
     defaultEnforcement: 'warn',

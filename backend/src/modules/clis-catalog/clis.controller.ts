@@ -5,7 +5,6 @@ import { ClisImportExportService } from './import-export.service';
 import { CreateCliDto } from './dto/create-cli.dto';
 import { UpdateCliDto } from './dto/update-cli.dto';
 import { ImportCatalogDto } from './dto/import-catalog.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -21,7 +20,7 @@ export class ClisController {
   ) {}
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('import')
   @ApiOperation({
@@ -33,7 +32,7 @@ export class ClisController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Get('export.yaml')
   @Header('Content-Type', 'application/yaml; charset=utf-8')
@@ -69,7 +68,7 @@ export class ClisController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post()
   @ApiOperation({ summary: 'Create CLI (admin/operator)' })
@@ -78,7 +77,7 @@ export class ClisController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Patch(':id')
   @ApiOperation({ summary: 'Update CLI (admin/operator)' })
@@ -87,7 +86,7 @@ export class ClisController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin')
   @Delete(':id')
   @ApiOperation({ summary: 'Delete CLI (admin)' })

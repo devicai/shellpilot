@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TracesRepository } from '../traces.repository';
+import { ExtensionScope } from '../../../interfaces';
 
 export type StatsPeriod = '24h' | '7d' | '30d';
 
@@ -52,10 +53,10 @@ const EXCLUDED_FROM_DASHBOARD = ['shellpilot', 'devic-cli-wrapper', 'devic-wrapp
 export class StatsService {
   constructor(private readonly repo: TracesRepository) {}
 
-  async aggregate(period: StatsPeriod = '24h'): Promise<StatsResult> {
+  async aggregate(period: StatsPeriod = '24h', scope: ExtensionScope = {}): Promise<StatsResult> {
     const from = periodStart(period);
     const match = {
-      $match: { timestamp: { $gte: from }, cli: { $nin: EXCLUDED_FROM_DASHBOARD } },
+      $match: { timestamp: { $gte: from }, cli: { $nin: EXCLUDED_FROM_DASHBOARD }, ...scope },
     };
 
     const [totalAgg, byDecisionAgg, byCliAgg, byUserAgg] = await Promise.all([
@@ -88,7 +89,7 @@ export class StatsService {
     };
   }
 
-  async timeseries(period: StatsPeriod = '24h'): Promise<TimeseriesResult> {
+  async timeseries(period: StatsPeriod = '24h', scope: ExtensionScope = {}): Promise<TimeseriesResult> {
     const from = periodStart(period);
     const bucket: 'hour' | 'day' = period === '24h' ? 'hour' : 'day';
     const bucketMs = bucket === 'hour' ? HOUR_MS : DAY_MS;
@@ -107,7 +108,7 @@ export class StatsService {
       deny: number;
       requiresApproval: number;
     }>([
-      { $match: { timestamp: { $gte: from }, cli: { $nin: EXCLUDED_FROM_DASHBOARD } } },
+      { $match: { timestamp: { $gte: from }, cli: { $nin: EXCLUDED_FROM_DASHBOARD }, ...scope } },
       {
         $group: {
           _id: dateExpr,

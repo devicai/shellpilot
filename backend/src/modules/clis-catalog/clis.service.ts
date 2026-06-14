@@ -10,7 +10,7 @@ export class ClisService {
   constructor(private readonly repo: ClisRepository) {}
 
   async create(dto: CreateCliDto, scope: ExtensionScope): Promise<Cli> {
-    const existing = await this.repo.findBySlug(dto.slug);
+    const existing = await this.repo.findBySlug(dto.slug, scope);
     if (existing) throw new ConflictException(`CLI '${dto.slug}' already exists`);
     return this.repo.create(
       { ...dto, slug: dto.slug.toLowerCase(), active: dto.active ?? true } as Partial<Cli>,
@@ -28,7 +28,7 @@ export class ClisService {
   }
 
   async findOne(idOrSlug: string, scope: ExtensionScope): Promise<Cli> {
-    const bySlug = await this.repo.findBySlug(idOrSlug);
+    const bySlug = await this.repo.findBySlug(idOrSlug, scope);
     if (bySlug) return bySlug;
     const byId = await this.repo.findById(idOrSlug, scope);
     if (!byId) throw new NotFoundException('CLI not found');

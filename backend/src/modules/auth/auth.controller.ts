@@ -3,7 +3,13 @@ import { ApiBearerAuth, ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagg
 import { AuthService } from './auth.service';
 import { CliAuthService } from './cli-auth.service';
 import { LoginDto } from './dto/login.dto';
-import { ProvisionDto, GenerateEnrollmentDto, EnrollDto } from './dto/cli-auth.dto';
+import {
+  ProvisionDto,
+  ProvisionServiceAccountDto,
+  GenerateEnrollmentDto,
+  EnrollDto,
+  MintCliKeyDto,
+} from './dto/cli-auth.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -12,7 +18,8 @@ import { JwtOrApiKeyGuard } from './guards/jwt-or-api-key.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CurrentApiKey } from '../../common/decorators/current-api-key.decorator';
-import { AuthenticatedApiKey, AuthenticatedUser } from '../../interfaces';
+import { Scope } from '../../common/decorators/scope.decorator';
+import { AuthenticatedApiKey, AuthenticatedUser, ExtensionScope } from '../../interfaces';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -60,33 +67,77 @@ export class AuthController {
   @UseGuards(JwtOrApiKeyGuard)
   @Get('whoami')
   @ApiOperation({ summary: 'Identity behind the JWT or API key (used by the CLI `whoami`)' })
-  whoami(@CurrentUser() user?: AuthenticatedUser, @CurrentApiKey() apiKey?: AuthenticatedApiKey) {
+  whoami(
+    @Scope() scope: ExtensionScope,
+    @CurrentUser() user?: AuthenticatedUser,
+    @CurrentApiKey() apiKey?: AuthenticatedApiKey,
+  ) {
     if (user) return { id: user.id, email: user.email, name: user.name };
-    return this.cliAuth.whoami(apiKey!.userId);
+    return this.cliAuth.whoami(apiKey!.userId, scope);
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiSecurity('x-api-key')
+  @UseGuards(JwtOrApiKeyGuard)
+  @Post('cli-key')
+  @ApiOperation({ summary: 'Mint a per-device API key for the authenticated user (browser login, case 2)' })
+  mintCliKey(
+    @Body() dto: MintCliKeyDto,
+    @Scope() scope: ExtensionScope,
+    @CurrentUser() user?: AuthenticatedUser,
+    @CurrentApiKey() apiKey?: AuthenticatedApiKey,
+  ) {
+    // The caller is whoever the guard authenticated: a JWT user, a user a trusted
+    // BFF is acting as (act-as), or the owner of the raw API key. In every case
+    // the key is minted for that same identity — never for someone else.
+    const callerId = user?.id ?? apiKey!.userId;
+    return this.cliAuth.mintSelf(callerId, dto.name, scope);
+  }
+
+  @ApiBearerAuth()
+  @ApiSecurity('x-api-key')
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin')
   @Post('enrollment')
   @ApiOperation({ summary: 'Admin: generate a single-use enrollment token for a user (case 3)' })
-  generateEnrollment(@Body() dto: GenerateEnrollmentDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.cliAuth.generateEnrollment(dto.userId, user.id);
+  generateEnrollment(
+    @Body() dto: GenerateEnrollmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Scope() scope: ExtensionScope,
+  ) {
+    // Accepts a JWT admin or a trusted caller acting as an admin (act-as scope):
+    // either way RolesGuard has asserted the principal is an admin and the guard
+    // attached it to `req.user`, so `user.id` is the authorising admin's id.
+    return this.cliAuth.generateEnrollment(dto.userId, user.id, scope);
   }
 
   @ApiSecurity('x-api-key')
   @UseGuards(ApiKeyAuthGuard)
   @Post('enroll')
   @ApiOperation({ summary: 'Redeem an enrollment token for an API key (admin API key authorises) (case 3)' })
-  enroll(@Body() dto: EnrollDto, @CurrentApiKey() apiKey: AuthenticatedApiKey) {
-    return this.cliAuth.redeemEnrollment(dto.enrollToken, apiKey.userId);
+  enroll(@Body() dto: EnrollDto, @CurrentApiKey() apiKey: AuthenticatedApiKey, @Scope() scope: ExtensionScope) {
+    return this.cliAuth.redeemEnrollment(dto.enrollToken, apiKey.userId, scope);
   }
 
   @ApiSecurity('x-api-key')
   @UseGuards(ApiKeyAuthGuard)
   @Post('provision')
   @ApiOperation({ summary: 'Admin: mint an API key for a service account by id/email (case 1)' })
-  provision(@Body() dto: ProvisionDto, @CurrentApiKey() apiKey: AuthenticatedApiKey) {
-    return this.cliAuth.provision(dto.serviceAccount, dto.name, apiKey.userId);
+  provision(@Body() dto: ProvisionDto, @CurrentApiKey() apiKey: AuthenticatedApiKey, @Scope() scope: ExtensionScope) {
+    return this.cliAuth.provision(dto.serviceAccount, dto.name, apiKey.userId, scope);
+  }
+
+  @ApiSecurity('x-api-key')
+  @UseGuards(ApiKeyAuthGuard)
+  @Post('service-account')
+  @ApiOperation({
+    summary: 'Admin: ensure a service account by external entity id and mint an API key for it',
+  })
+  provisionServiceAccount(
+    @Body() dto: ProvisionServiceAccountDto,
+    @CurrentApiKey() apiKey: AuthenticatedApiKey,
+    @Scope() scope: ExtensionScope,
+  ) {
+    return this.cliAuth.provisionServiceAccount(dto.externalUserId, dto.name, apiKey.userId, scope);
   }
 }

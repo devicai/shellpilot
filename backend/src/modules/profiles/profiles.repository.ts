@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { BaseRepository } from '../../repositories/base.repository';
 import { EXTENSIONS_TOKEN } from '../../providers/extensions.provider';
 import { ExtensionProperty } from '../../config/config.types';
+import { ExtensionScope } from '../../interfaces';
 import { Profile } from './schema/profile.schema';
 
 @Injectable()
@@ -15,7 +16,7 @@ export class ProfilesRepository extends BaseRepository<Profile> {
     super(model, Profile.name, extensions);
   }
 
-  async findByName(name: string): Promise<Profile | null> {
-    return this.model.findOne({ name }).exec();
+  async findByName(name: string, scope: ExtensionScope = {}): Promise<Profile | null> {
+    return this.model.findOne(this.applyScope({ name }, scope)).exec();
   }
 }

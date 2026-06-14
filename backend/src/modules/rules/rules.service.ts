@@ -67,7 +67,7 @@ export class RulesService {
     // Activation needs no cache bust: content is cached per id and a fresh
     // policy isn't cached yet; the fallback id is resolved live.
     if (policy.active) {
-      await this.policies.deactivateOthers(String(policy._id));
+      await this.policies.deactivateOthers(String(policy._id), scope);
     }
     return policy;
   }
@@ -81,7 +81,7 @@ export class RulesService {
       scope,
     )) as Policy & { _id: Types.ObjectId; active: boolean };
     if (updated.active) {
-      await this.policies.deactivateOthers(String(updated._id));
+      await this.policies.deactivateOthers(String(updated._id), scope);
     }
     // Content (metadata/clis) changed → bust this policy's cached content.
     await this.evaluator.invalidatePolicy(id);
@@ -91,7 +91,7 @@ export class RulesService {
   async activatePolicy(id: string, scope: ExtensionScope): Promise<Policy> {
     const updated = (await this.policies.updateById(id, { active: true }, scope)) as (Policy & { _id: Types.ObjectId }) | null;
     if (!updated) throw new NotFoundException('Policy not found');
-    await this.policies.deactivateOthers(String(updated._id));
+    await this.policies.deactivateOthers(String(updated._id), scope);
     // No cache bust: activation only changes which id is the fallback (resolved
     // live); the policy's cached content is unchanged.
     return updated;
@@ -100,14 +100,14 @@ export class RulesService {
   async deletePolicy(id: string, scope: ExtensionScope): Promise<void> {
     const ok = await this.policies.deleteById(id, scope);
     if (!ok) throw new NotFoundException('Policy not found');
-    await this.rules.deleteByPolicy(id);
+    await this.rules.deleteByPolicy(id, scope);
     await this.evaluator.invalidatePolicy(id);
   }
 
   // ---- Rules ----
 
-  async listRules(policyId: string): Promise<Rule[]> {
-    return this.rules.findByPolicy(policyId);
+  async listRules(policyId: string, scope: ExtensionScope = {}): Promise<Rule[]> {
+    return this.rules.findByPolicy(policyId, scope);
   }
 
   async createRule(policyId: string, dto: CreateRuleDto, scope: ExtensionScope): Promise<Rule> {

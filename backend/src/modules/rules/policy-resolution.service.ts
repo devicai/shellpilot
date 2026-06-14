@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { UsersRepository } from '../users/users.repository';
 import { ProfilesRepository } from '../profiles/profiles.repository';
 import { PoliciesRepository } from './policies.repository';
+import { ExtensionScope } from '../../interfaces';
 
 /**
  * Resolves the EFFECTIVE policy for a user — the single source of truth for
@@ -30,26 +31,26 @@ export class PolicyResolutionService {
    * (a deleted policy must not break the wrapper). Returns null when nothing
    * applies; the caller decides the no-policy behaviour.
    */
-  async resolveEffectivePolicyId(userId: string): Promise<string | null> {
-    const user = await this.users.findById(userId, {});
+  async resolveEffectivePolicyId(userId: string, scope: ExtensionScope = {}): Promise<string | null> {
+    const user = await this.users.findById(userId, scope);
     if (user) {
       const directId = user.policyId ? String(user.policyId) : null;
-      if (directId && (await this.policyExists(directId))) return directId;
+      if (directId && (await this.policyExists(directId, scope))) return directId;
 
       if (user.profileId) {
-        const profile = await this.profiles.findById(String(user.profileId), {});
+        const profile = await this.profiles.findById(String(user.profileId), scope);
         const profilePolicyId = profile?.policyId ? String(profile.policyId) : null;
-        if (profilePolicyId && (await this.policyExists(profilePolicyId))) return profilePolicyId;
+        if (profilePolicyId && (await this.policyExists(profilePolicyId, scope))) return profilePolicyId;
       }
     }
 
-    const active = await this.policies.findActive();
+    const active = await this.policies.findActive(scope);
     return active ? this.idOf(active) : null;
   }
 
-  private async policyExists(id: string): Promise<boolean> {
+  private async policyExists(id: string, scope: ExtensionScope = {}): Promise<boolean> {
     if (!Types.ObjectId.isValid(id)) return false;
-    return !!(await this.policies.findById(id, {}));
+    return !!(await this.policies.findById(id, scope));
   }
 
   private idOf(doc: unknown): string {

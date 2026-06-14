@@ -4,6 +4,7 @@ import { Types } from 'mongoose';
 import { RedisService } from '../../redis/redis.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { UsersService } from '../users/users.service';
+import { ExtensionScope } from '../../interfaces';
 
 const ENROLL_PREFIX = 'shellpilot:enroll:';
 const ENROLL_TTL_SECONDS = 24 * 60 * 60; // 24h
@@ -23,9 +24,10 @@ export interface MintedCredential {
  * Backs the three CLI authentication flows. The common outcome is a named,
  * per-device API key for a user — the only credential the wrapper stores.
  *   - provision        (case 1): admin mints a key for a service account directly.
+ *   - mintSelf         (case 2): the authenticated user mints a per-device key
+ *     for themselves (browser login flow; no admin required).
  *   - generate/redeem  (case 3): admin emits a single-use enrollment token; the
  *     employee redeems it (authorised by an admin API key) for a real key.
- * (Case 2, browser login, mints via the JWT `POST /api-keys` from the frontend.)
  */
 @Injectable()
 export class CliAuthService {
@@ -36,18 +38,83 @@ export class CliAuthService {
   ) {}
 
   /** Case 1 — admin provisions a service account (by id or email) directly. */
-  async provision(serviceAccount: string, name: string | undefined, callerUserId: string): Promise<MintedCredential> {
-    await this.requireAdmin(callerUserId);
-    const userId = await this.apiKeys.resolveUserId(serviceAccount);
-    const user = await this.users.findById(userId, {});
-    const issued = await this.apiKeys.mintForUser(userId, name?.trim() || `cli-provision-${this.today()}`);
+  async provision(
+    serviceAccount: string,
+    name: string | undefined,
+    callerUserId: string,
+    scope: ExtensionScope = {},
+  ): Promise<MintedCredential> {
+    await this.requireAdmin(callerUserId, scope);
+    const userId = await this.apiKeys.resolveUserId(serviceAccount, scope);
+    const user = await this.users.findById(userId, scope);
+    const issued = await this.apiKeys.mintForUser(
+      userId,
+      name?.trim() || `cli-provision-${this.today()}`,
+      [],
+      undefined,
+      scope,
+    );
+    return { apiKey: issued.token, user: this.publicUser(user) };
+  }
+
+  /**
+   * Ensure a service account exists for a consuming entity (keyed by its
+   * `externalUserId` within the tenant) and mint an API key for it, in one call.
+   * Idempotent on the account: repeated calls reuse the same service-account user
+   * and add another key. Used to bind an automated caller (e.g. an agent) to a
+   * tenant without a human in the loop.
+   */
+  async provisionServiceAccount(
+    externalUserId: string,
+    name: string | undefined,
+    callerUserId: string,
+    scope: ExtensionScope = {},
+  ): Promise<MintedCredential> {
+    await this.requireAdmin(callerUserId, scope);
+    const sa = await this.users.ensureServiceAccount(
+      { externalUserId, name },
+      scope,
+    );
+    const userId = String((sa as unknown as { _id: Types.ObjectId })._id);
+    const issued = await this.apiKeys.mintForUser(
+      userId,
+      name?.trim() || `sa-${externalUserId}`,
+      [],
+      undefined,
+      scope,
+    );
+    return { apiKey: issued.token, user: this.publicUser(sa) };
+  }
+
+  /**
+   * Case 2 — browser login: the authenticated user mints a per-device API key
+   * for themselves. No admin check — anyone may issue their own key; the guard
+   * has already verified the caller's identity (`callerUserId` is that user).
+   */
+  async mintSelf(
+    callerUserId: string,
+    name: string | undefined,
+    scope: ExtensionScope = {},
+  ): Promise<MintedCredential> {
+    const user = await this.users.findById(callerUserId, scope);
+    const issued = await this.apiKeys.mintForUser(
+      callerUserId,
+      name?.trim() || `cli-login-${this.today()}`,
+      [],
+      undefined,
+      scope,
+    );
     return { apiKey: issued.token, user: this.publicUser(user) };
   }
 
   /** Case 3a — admin generates a single-use enrollment token for a user. */
-  async generateEnrollment(userId: string, callerUserId: string): Promise<{ enrollToken: string; expiresAt: string; userEmail: string }> {
-    await this.requireAdmin(callerUserId);
-    const user = await this.users.findById(userId, {}); // throws if not found
+  async generateEnrollment(
+    userId: string,
+    callerUserId: string,
+    scope: ExtensionScope = {},
+  ): Promise<{ enrollToken: string; expiresAt: string; userEmail: string }> {
+    await this.requireAdmin(callerUserId, scope);
+    const user = await this.users.findById(userId, scope); // throws if not found / cross-tenant
     const token = randomBytes(24).toString('base64url');
     await this.redis.setex(ENROLL_PREFIX + token, ENROLL_TTL_SECONDS, userId);
     return {
@@ -58,24 +125,34 @@ export class CliAuthService {
   }
 
   /** Case 3b — redeem the enrollment token (authorised by an admin API key). */
-  async redeemEnrollment(token: string, callerUserId: string): Promise<MintedCredential> {
-    await this.requireAdmin(callerUserId);
+  async redeemEnrollment(
+    token: string,
+    callerUserId: string,
+    scope: ExtensionScope = {},
+  ): Promise<MintedCredential> {
+    await this.requireAdmin(callerUserId, scope);
     const key = ENROLL_PREFIX + token;
     const userId = await this.redis.get(key);
     if (!userId) throw new BadRequestException('Invalid or expired enrollment token');
     await this.redis.del(key); // single-use
-    const user = await this.users.findById(userId, {});
-    const issued = await this.apiKeys.mintForUser(userId, `cli-enroll-${this.today()}`);
+    const user = await this.users.findById(userId, scope);
+    const issued = await this.apiKeys.mintForUser(userId, `cli-enroll-${this.today()}`, [], undefined, scope);
     return { apiKey: issued.token, user: this.publicUser(user) };
   }
 
   /** Identity behind an API key (for `whoami`). */
-  async whoami(userId: string): Promise<PublicUser> {
-    const user = await this.users.findById(userId, {});
+  async whoami(userId: string, scope: ExtensionScope = {}): Promise<PublicUser> {
+    const user = await this.users.findById(userId, scope);
     return this.publicUser(user);
   }
 
-  private async requireAdmin(userId: string): Promise<void> {
+  // Role is a property of the caller's identity, which the auth guard already
+  // verified belongs to this request — so the role check resolves the caller by
+  // id alone, NOT under the request's tenant scope. This lets an internal/global
+  // admin (whose key carries no tenant binding) act on a tenant supplied by
+  // header, while every *data* operation below it stays tenant-fenced by `scope`.
+  // A per-tenant admin's key still pins its own tenant, so it can never widen.
+  private async requireAdmin(userId: string, _scope: ExtensionScope = {}): Promise<void> {
     const u = await this.users.findById(userId, {}).catch(() => null);
     if (!u || u.role !== 'admin') {
       throw new ForbiddenException('Admin credentials required for this operation');

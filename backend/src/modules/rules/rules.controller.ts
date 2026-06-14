@@ -1,6 +1,5 @@
 import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProduces, ApiTags, ApiSecurity } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiKeyAuthGuard } from '../auth/guards/api-key-auth.guard';
 import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -37,8 +36,8 @@ export class RulesController {
   @Header('Content-Type', 'application/yaml; charset=utf-8')
   @ApiProduces('application/yaml')
   @ApiOperation({ summary: "Effective policy for the API key's identity, compiled to YAML (Go wrapper)" })
-  getActivePolicyYaml(@CurrentApiKey() apiKey: AuthenticatedApiKey) {
-    return this.yamlCompiler.compileEffectivePolicyYamlForUser(apiKey.userId);
+  getActivePolicyYaml(@CurrentApiKey() apiKey: AuthenticatedApiKey, @Scope() scope: ExtensionScope) {
+    return this.yamlCompiler.compileEffectivePolicyYamlForUser(apiKey.userId, scope);
   }
 
   // --- Policies (JWT) ---
@@ -72,7 +71,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies')
   @ApiOperation({ summary: 'Create policy' })
@@ -81,7 +80,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Put('policies/:id')
   @ApiOperation({ summary: 'Replace policy' })
@@ -90,7 +89,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies/:id/activate')
   @ApiOperation({ summary: 'Activate a policy (deactivates all others)' })
@@ -99,7 +98,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin')
   @Delete('policies/:id')
   @ApiOperation({ summary: 'Delete policy and all its rules' })
@@ -111,12 +110,12 @@ export class RulesController {
   // --- Webhook test ---
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies/:id/webhooks/:event/test')
   @ApiOperation({ summary: 'Send a test ping to a configured webhook URL' })
-  testWebhook(@Param('id') id: string, @Param('event') event: string) {
-    return this.webhooks.testEvent(id, event as WebhookEvent);
+  testWebhook(@Param('id') id: string, @Param('event') event: string, @Scope() scope: ExtensionScope) {
+    return this.webhooks.testEvent(id, event as WebhookEvent, scope);
   }
 
   // --- Rules ---
@@ -125,12 +124,12 @@ export class RulesController {
   @UseGuards(JwtOrApiKeyGuard)
   @Get('policies/:policyId/rules')
   @ApiOperation({ summary: 'List rules for a policy' })
-  listRules(@Param('policyId') policyId: string) {
-    return this.service.listRules(policyId);
+  listRules(@Param('policyId') policyId: string, @Scope() scope: ExtensionScope) {
+    return this.service.listRules(policyId, scope);
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Post('policies/:policyId/rules')
   @ApiOperation({ summary: 'Create rule under a policy' })
@@ -139,7 +138,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Patch('rules/:id')
   @ApiOperation({ summary: 'Update rule' })
@@ -148,7 +147,7 @@ export class RulesController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtOrApiKeyGuard, RolesGuard)
   @Roles('admin', 'operator')
   @Delete('rules/:id')
   @ApiOperation({ summary: 'Delete rule' })
@@ -163,12 +162,14 @@ export class RulesController {
   @UseGuards(ApiKeyAuthGuard)
   @Post('evaluate')
   @ApiOperation({ summary: "Evaluate a CLI command against the API key's effective policy" })
-  evaluate(@Body() dto: EvaluateDto, @CurrentApiKey() apiKey: AuthenticatedApiKey) {
+  evaluate(@Body() dto: EvaluateDto, @CurrentApiKey() apiKey: AuthenticatedApiKey, @Scope() scope: ExtensionScope) {
     // Identity comes from the authenticated key, never the body (a key must not
     // evaluate as another user). dto.policyId stays as an explicit admin/test override.
-    return this.evaluator.evaluate(dto.cli, dto.args, {
-      userId: apiKey.userId,
-      policyOverrideId: dto.policyId,
-    });
+    return this.evaluator.evaluate(
+      dto.cli,
+      dto.args,
+      { userId: apiKey.userId, policyOverrideId: dto.policyId },
+      scope,
+    );
   }
 }

@@ -8,6 +8,7 @@ import { PolicyResolutionService } from '../policy-resolution.service';
 import { Cli } from '../../clis-catalog/schema/cli.schema';
 import { Policy } from '../schema/policy.schema';
 import { Rule } from '../schema/rule.schema';
+import { ExtensionScope } from '../../../interfaces';
 
 /**
  * Compiles a policy + matching CLI catalog entries into the YAML shape the Go
@@ -25,30 +26,30 @@ export class PolicyYamlService {
   ) {}
 
   /** Compile the effective policy for a user (direct → profile → global active). */
-  async compileEffectivePolicyYamlForUser(userId: string): Promise<string> {
-    const policyId = await this.resolution.resolveEffectivePolicyId(userId);
+  async compileEffectivePolicyYamlForUser(userId: string, scope: ExtensionScope = {}): Promise<string> {
+    const policyId = await this.resolution.resolveEffectivePolicyId(userId, scope);
     if (!policyId) {
       throw new NotFoundException('No effective policy for this identity');
     }
-    return this.compilePolicyYaml(policyId);
+    return this.compilePolicyYaml(policyId, scope);
   }
 
   /** Compile the globally-active policy (no user context). */
-  async compileActivePolicyYaml(): Promise<string> {
-    const policy = (await this.policies.findActive()) as (Policy & { _id: { toString(): string } }) | null;
+  async compileActivePolicyYaml(scope: ExtensionScope = {}): Promise<string> {
+    const policy = (await this.policies.findActive(scope)) as (Policy & { _id: { toString(): string } }) | null;
     if (!policy) {
       throw new NotFoundException('No active policy configured');
     }
-    return this.compilePolicyYaml(policy._id.toString());
+    return this.compilePolicyYaml(policy._id.toString(), scope);
   }
 
-  async compilePolicyYaml(policyId: string): Promise<string> {
-    const policy = (await this.policies.findById(policyId, {})) as Policy | null;
+  async compilePolicyYaml(policyId: string, scope: ExtensionScope = {}): Promise<string> {
+    const policy = (await this.policies.findById(policyId, scope)) as Policy | null;
     if (!policy) {
       throw new NotFoundException('Policy not found');
     }
-    const rules = await this.rules.findByPolicy(policyId);
-    const clis = await this.loadCliCatalog(policy.clis ?? []);
+    const rules = await this.rules.findByPolicy(policyId, scope);
+    const clis = await this.loadCliCatalog(policy.clis ?? [], scope);
 
     const doc = {
       default_effect: policy.defaultEffect,
@@ -82,9 +83,13 @@ export class PolicyYamlService {
     };
   }
 
-  private async loadCliCatalog(slugs: string[]): Promise<Record<string, unknown>> {
+  private async loadCliCatalog(
+    slugs: string[],
+    scope: ExtensionScope = {},
+  ): Promise<Record<string, unknown>> {
     if (!slugs.length) return {};
-    const docs = await this.cliModel.find({ slug: { $in: slugs }, active: true }).lean().exec();
+    // Scope-aware: only the requesting tenant's catalog entries are compiled.
+    const docs = await this.cliModel.find({ slug: { $in: slugs }, active: true, ...scope }).lean().exec();
     const out: Record<string, unknown> = {};
     for (const c of docs) {
       const install = c.installCommands ?? {};

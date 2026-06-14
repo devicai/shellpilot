@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CatalogRegistryService } from './catalog-registry.service';
 import { ImportRegistryDto } from './dto/import-registry.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Scope } from '../../common/decorators/scope.decorator';
@@ -13,7 +13,7 @@ import { ExtensionScope } from '../../interfaces';
 // Imported entries are pinned to their source version; updates are opt-in.
 @ApiTags('CLI Catalog Registry')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtOrApiKeyGuard, RolesGuard)
 @Roles('admin', 'operator')
 @Controller('catalog')
 export class CatalogController {

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Card, Form, Input, Button, Typography, Alert } from 'antd';
+import { useEffect, useState } from 'react';
+import { Card, Form, Input, Button, Typography, Alert, Divider } from 'antd';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import DevicLogo from '../assets/devic-logo.png';
@@ -7,10 +7,23 @@ import DevicLogo from '../assets/devic-logo.png';
 const { Title, Text } = Typography;
 
 export function LoginPage() {
-  const { user, login, loading } = useAuth();
+  const { user, login, loading, publicConfig } = useAuth();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Default to local-only until public-config loads, so standalone behaviour is unchanged.
+  const providers = publicConfig?.auth.providers ?? ['local'];
+  const externalLoginUrl = publicConfig?.auth.externalLoginUrl ?? null;
+  const localEnabled = providers.includes('local');
+  const externalEnabled = providers.includes('external-jwt');
+
+  // External-only deployments: bounce straight to the identity provider.
+  useEffect(() => {
+    if (!loading && !user && externalEnabled && !localEnabled && externalLoginUrl) {
+      window.location.href = externalLoginUrl;
+    }
+  }, [loading, user, externalEnabled, localEnabled, externalLoginUrl]);
 
   if (!loading && user) {
     return <Navigate to="/dashboard" replace />;
@@ -58,25 +71,35 @@ export function LoginPage() {
           <Text style={{ color: '#8c8c8c', fontSize: 12 }}>Sign in to the admin console</Text>
         </div>
         {error && <Alert type="error" message={error} style={{ marginBottom: 16 }} showIcon />}
-        <Form layout="vertical" onFinish={onFinish}>
-          <Form.Item
-            label="Email"
-            name="email"
-            rules={[{ required: true, type: 'email', message: 'Enter a valid email' }]}
-          >
-            <Input autoComplete="username" />
-          </Form.Item>
-          <Form.Item
-            label="Password"
-            name="password"
-            rules={[{ required: true, message: 'Password required' }]}
-          >
-            <Input.Password autoComplete="current-password" />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" loading={submitting} block>
-            Sign in
-          </Button>
-        </Form>
+        {localEnabled && (
+          <Form layout="vertical" onFinish={onFinish}>
+            <Form.Item
+              label="Email"
+              name="email"
+              rules={[{ required: true, type: 'email', message: 'Enter a valid email' }]}
+            >
+              <Input autoComplete="username" />
+            </Form.Item>
+            <Form.Item
+              label="Password"
+              name="password"
+              rules={[{ required: true, message: 'Password required' }]}
+            >
+              <Input.Password autoComplete="current-password" />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={submitting} block>
+              Sign in
+            </Button>
+          </Form>
+        )}
+        {externalEnabled && externalLoginUrl && (
+          <>
+            {localEnabled && <Divider plain style={{ color: '#8c8c8c', fontSize: 12 }}>or</Divider>}
+            <Button block onClick={() => (window.location.href = externalLoginUrl)}>
+              Sign in with single sign-on
+            </Button>
+          </>
+        )}
       </Card>
     </div>
   );

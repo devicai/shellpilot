@@ -10,7 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtOrApiKeyGuard } from '../auth/guards/jwt-or-api-key.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Scope } from '../../common/decorators/scope.decorator';
@@ -18,11 +18,12 @@ import { ExtensionScope } from '../../interfaces';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { EnsureUserDto } from './dto/ensure-user.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('Users')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtOrApiKeyGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly service: UsersService) {}
@@ -46,6 +47,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Create a user (admin)' })
   create(@Body() dto: CreateUserDto, @Scope() scope: ExtensionScope) {
     return this.service.create(dto, scope);
+  }
+
+  @Post('ensure')
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'Find-or-create a passwordless user by external identity (admin)',
+  })
+  ensure(@Body() dto: EnsureUserDto, @Scope() scope: ExtensionScope) {
+    return this.service.ssoUpsert(dto, scope);
   }
 
   @Get(':id')

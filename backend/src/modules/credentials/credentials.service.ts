@@ -72,17 +72,22 @@ export class CredentialsService {
     const envelope = this.normalizeEnvelope(auth.mode, dto.payload);
     const sealed = this.cipher.seal(JSON.stringify(envelope));
 
-    return this.repo.upsertForUserAndCli(ownerId, cli.slug, {
-      mode: auth.mode,
-      envVar: auth.envVar,
-      envVars: auth.envVars,
-      filePath: auth.filePath,
-      fileFormat: auth.fileFormat,
-      flag: auth.flag,
-      envelopeCiphertext: sealed.ciphertext,
-      envelopeIv: sealed.iv,
-      envelopeTag: sealed.tag,
-    });
+    return this.repo.upsertForUserAndCli(
+      ownerId,
+      cli.slug,
+      {
+        mode: auth.mode,
+        envVar: auth.envVar,
+        envVars: auth.envVars,
+        filePath: auth.filePath,
+        fileFormat: auth.fileFormat,
+        flag: auth.flag,
+        envelopeCiphertext: sealed.ciphertext,
+        envelopeIv: sealed.iv,
+        envelopeTag: sealed.tag,
+      },
+      scope,
+    );
   }
 
   private normalizeEnvelope(
@@ -162,22 +167,31 @@ export class CredentialsService {
     await this.repo.deleteById(id, scope);
   }
 
-  async issue(dto: IssueCredentialDto): Promise<{ jitToken: string; expiresIn: number }> {
+  async issue(
+    dto: IssueCredentialDto,
+    scope: ExtensionScope,
+  ): Promise<{ jitToken: string; expiresIn: number }> {
     // Identity is set by the controller from the authenticated API key.
     const userId = dto.userId;
     if (!userId) {
       throw new BadRequestException('Missing identity (no API key user)');
     }
+    // Every lookup below is tenant-scoped: a key from one tenant cannot issue
+    // credentials against another tenant's user / profile / vault entry, even if
+    // it supplies a foreign userId.
     // Profile gate: if the user has a profile assigned and it whitelists CLIs,
     // refuse early when the requested cli isn't in the list. Department
     // boundaries: a marketing user shouldn't be able to issue gcloud creds
     // even if a vault entry exists for them. The wrapper turns this into a
     // policy-deny equivalent at the call site.
-    const user = (await this.users.findById(userId, {})) as
+    const user = (await this.users.findById(userId, scope)) as
       | { profileId?: { toString(): string } }
       | null;
-    if (user?.profileId) {
-      const profile = await this.profiles.findById(user.profileId.toString(), {});
+    if (!user) {
+      throw new NotFoundException(`No user ${userId} in this tenant`);
+    }
+    if (user.profileId) {
+      const profile = await this.profiles.findById(user.profileId.toString(), scope);
       if (profile && profile.clis && profile.clis.length > 0) {
         const allowed = profile.clis.map((s) => s.toLowerCase());
         if (!allowed.includes(dto.cli.toLowerCase())) {
@@ -188,7 +202,7 @@ export class CredentialsService {
       }
     }
 
-    const entry = await this.repo.findForUserAndCli(userId, dto.cli);
+    const entry = await this.repo.findForUserAndCli(userId, dto.cli, scope);
     if (!entry) {
       throw new NotFoundException(
         `No credential stored for user ${userId} and CLI ${dto.cli}`,
@@ -206,7 +220,7 @@ export class CredentialsService {
     // the source of truth for delivery shape (filePath, mode, flag, env names),
     // not the VaultEntry, so an admin updating the entry takes effect on next
     // command. The VaultEntry's snapshot is kept for /credentials list display.
-    const cli = await this.clis.findOne(dto.cli, {} as ExtensionScope);
+    const cli = await this.clis.findOne(dto.cli, scope);
     const auth = cli.auth ?? { mode: entry.mode };
 
     const issued = await this.jit.issue({
@@ -222,6 +236,7 @@ export class CredentialsService {
       postProcess: auth.postProcess as Array<Record<string, unknown>> | undefined,
       delivery: auth.delivery as Array<Record<string, unknown>> | undefined,
       commandPath: dto.commandPath,
+      scope,
     });
 
     // Trace the JIT issuance so operators see who is fetching which credential
@@ -229,13 +244,16 @@ export class CredentialsService {
     // here is non-fatal — issuance succeeded and we don't want a trace hiccup
     // to mask a working credential flow.
     try {
-      await this.traces.ingest({
-        cli: dto.cli,
-        commandPath: dto.commandPath ?? [],
-        decision: 'jit-issued',
-        userId: dto.userId,
-        agent: 'shellpilot-backend',
-      });
+      await this.traces.ingest(
+        {
+          cli: dto.cli,
+          commandPath: dto.commandPath ?? [],
+          decision: 'jit-issued',
+          userId: dto.userId,
+          agent: 'shellpilot-backend',
+        },
+        scope,
+      );
     } catch (err) {
       this.logger.warn(
         `Failed to emit jit-issued trace for user=${dto.userId} cli=${dto.cli}: ${(err as Error).message}`,
@@ -245,10 +263,19 @@ export class CredentialsService {
     return issued;
   }
 
-  async verify(dto: VerifyCredentialDto): Promise<JitVerifyResponse> {
+  async verify(dto: VerifyCredentialDto, scope: ExtensionScope): Promise<JitVerifyResponse> {
     const payload = await this.jit.consume(dto.jitToken);
     if (!payload) {
       throw new NotFoundException('JIT token not found or already consumed');
+    }
+    // Tenant fence: a token may only be consumed from the tenant that issued it.
+    // Compares every configured extension value carried on the JIT payload.
+    if (payload.scope) {
+      for (const [key, value] of Object.entries(payload.scope)) {
+        if (scope[key] !== value) {
+          throw new ForbiddenException('JIT token does not belong to this tenant');
+        }
+      }
     }
     if (dto.expectedCommandPath && payload.commandPath) {
       const expected = dto.expectedCommandPath.join(' ');
