@@ -1,17 +1,35 @@
 import { Model, FilterQuery, UpdateQuery } from 'mongoose';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ExtensionProperty } from '../config/config.types';
 import { ExtensionScope, PaginatedResponse } from '../interfaces';
 import { EXTENSIONS_TOKEN } from '../providers/extensions.provider';
 
 @Injectable()
 export abstract class BaseRepository<T> {
+  private readonly baseLogger = new Logger(BaseRepository.name);
+
   constructor(
     protected readonly model: Model<T>,
     protected readonly entityName: string,
     @Inject(EXTENSIONS_TOKEN)
     private readonly extensions: ExtensionProperty[],
   ) {}
+
+  /**
+   * Reconcile this model's indexes with the schema: creates missing indexes and
+   * drops obsolete ones (e.g. a legacy global `slug_1` superseded by a
+   * tenant-scoped `slug_scoped_unique`). Idempotent; safe to run on every boot.
+   * Failures are logged but never throw, so a migration hiccup can't wedge boot.
+   */
+  async syncIndexes(): Promise<void> {
+    try {
+      await this.model.syncIndexes();
+    } catch (err) {
+      this.baseLogger.error(
+        `Failed to sync indexes for ${this.entityName}: ${(err as Error).message}`,
+      );
+    }
+  }
 
   protected applyScope(filter: FilterQuery<T>, scope: ExtensionScope): FilterQuery<T> {
     const scopedFilter = { ...filter };

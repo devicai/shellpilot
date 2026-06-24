@@ -1,5 +1,9 @@
 import { Schema } from 'mongoose';
-import { applyExtensions, applyExternalIdentityIndex } from './extensions.provider';
+import {
+  applyExtensions,
+  applyExternalIdentityIndex,
+  applyScopedUniqueIndex,
+} from './extensions.provider';
 import { ExtensionProperty } from '../config/config.types';
 
 const CLIENT_UID: ExtensionProperty = {
@@ -44,5 +48,40 @@ describe('applyExternalIdentityIndex', () => {
     applyExternalIdentityIndex(schema, 'User', [otherOnly]);
     const [keys] = findIndex(schema, 'externalUserId_scoped_unique')!;
     expect(keys).toEqual({ externalUserId: 1 });
+  });
+});
+
+describe('applyScopedUniqueIndex', () => {
+  it('indexes the field alone in standalone mode, unique without partial', () => {
+    const schema = new Schema({ slug: String });
+    applyScopedUniqueIndex(schema, 'Cli', [], 'slug', { name: 'slug_scoped_unique' });
+    const idx = findIndex(schema, 'slug_scoped_unique');
+    expect(idx).toBeDefined();
+    const [keys, opts] = idx!;
+    expect(keys).toEqual({ slug: 1 });
+    expect(opts).toMatchObject({ unique: true });
+    expect((opts as { partialFilterExpression?: unknown }).partialFilterExpression).toBeUndefined();
+  });
+
+  it('prefixes the index with applicable scope extensions (per-tenant uniqueness)', () => {
+    const schema = new Schema({ slug: String });
+    applyExtensions(schema, 'Cli', [CLIENT_UID]);
+    applyScopedUniqueIndex(schema, 'Cli', [CLIENT_UID], 'slug', { name: 'slug_scoped_unique' });
+    const [keys, opts] = findIndex(schema, 'slug_scoped_unique')!;
+    expect(keys).toEqual({ clientUID: 1, slug: 1 });
+    expect(opts).toMatchObject({ unique: true });
+  });
+
+  it('adds a partial filter expression when opts.partial is set', () => {
+    const schema = new Schema({ externalUserId: String });
+    applyScopedUniqueIndex(schema, 'User', [], 'externalUserId', {
+      name: 'externalUserId_scoped_unique',
+      partial: true,
+    });
+    const [, opts] = findIndex(schema, 'externalUserId_scoped_unique')!;
+    expect(opts).toMatchObject({
+      unique: true,
+      partialFilterExpression: { externalUserId: { $exists: true } },
+    });
   });
 });
