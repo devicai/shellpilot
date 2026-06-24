@@ -11,7 +11,10 @@ export type ProfileDocument = HydratedDocument<Profile>;
 // without touching any workstation.
 @Schema({ timestamps: true, collection: 'profiles' })
 export class Profile {
-  @Prop({ required: true, unique: true, index: true, trim: true })
+  // Unique per tenant — not globally. The scoped unique index is applied at boot
+  // (app.module via applyScopedUniqueIndex), so the same profile name can exist
+  // once per clientUID. A plain global `unique: true` here would break multi-tenancy.
+  @Prop({ required: true, trim: true })
   name!: string;
 
   @Prop({ trim: true })

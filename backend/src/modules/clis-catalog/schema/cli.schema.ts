@@ -110,7 +110,10 @@ export class CliSource {
 
 @Schema({ timestamps: true, collection: 'clis' })
 export class Cli {
-  @Prop({ required: true, unique: true, index: true, lowercase: true, trim: true })
+  // Unique per tenant — not globally. The scoped unique index is applied at boot
+  // (app.module via applyScopedUniqueIndex), so the same slug can exist once per
+  // clientUID. A plain global `unique: true` here would break multi-tenancy.
+  @Prop({ required: true, lowercase: true, trim: true })
   slug!: string;
 
   @Prop({ required: true, trim: true })

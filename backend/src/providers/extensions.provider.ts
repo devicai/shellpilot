@@ -36,32 +36,51 @@ function appliesTo(ext: ExtensionProperty, entityName: string): boolean {
 }
 
 /**
- * Unique index for an external-identity binding (`externalUserId`), scoped by any
- * configured scope extensions (e.g. a `clientUID` tenant key) that apply to the
- * entity. Call AFTER applyExtensions so the scope fields already exist.
+ * Build a unique index on `field`, scoped by any configured scope extensions
+ * (e.g. a `clientUID` tenant key) that apply to the entity. Call AFTER
+ * applyExtensions so the scope fields already exist on the schema.
  *
- * - Standalone (no extensions): unique on `externalUserId` alone.
- * - With a tenant extension: unique on `(<scope...>, externalUserId)` — the same
- *   external user id can exist once per tenant.
+ * - Standalone (no extensions): unique on `field` alone — identical to a plain
+ *   `@Prop({ unique: true })`.
+ * - With a tenant extension: unique on `(<scope...>, field)` — the same value can
+ *   exist once per tenant.
  *
- * A `partialFilterExpression` restricts uniqueness to documents that actually
- * carry an `externalUserId`, so purely local users (which never set it) are not
- * indexed and cannot collide on a missing value.
+ * `opts.partial` restricts uniqueness to documents that actually carry the field
+ * (`{ [field]: { $exists: true } }`), so optional fields don't collide on a
+ * missing value. Omit it for `required` fields, which always have a value.
+ */
+export function applyScopedUniqueIndex(
+  schema: Schema,
+  entityName: string,
+  extensions: ExtensionProperty[],
+  field: string,
+  opts: { name: string; partial?: boolean },
+): void {
+  const keys: Record<string, 1> = {};
+  for (const ext of extensions) {
+    if (appliesTo(ext, entityName)) keys[ext.name] = 1;
+  }
+  keys[field] = 1;
+
+  const indexOptions: Record<string, unknown> = { unique: true, name: opts.name };
+  if (opts.partial) {
+    indexOptions.partialFilterExpression = { [field]: { $exists: true } };
+  }
+  schema.index(keys, indexOptions);
+}
+
+/**
+ * Unique index for an external-identity binding (`externalUserId`), scoped per
+ * tenant. Thin wrapper over {@link applyScopedUniqueIndex}: partial so purely
+ * local users (which never set `externalUserId`) are not indexed.
  */
 export function applyExternalIdentityIndex(
   schema: Schema,
   entityName: string,
   extensions: ExtensionProperty[],
 ): void {
-  const keys: Record<string, 1> = {};
-  for (const ext of extensions) {
-    if (appliesTo(ext, entityName)) keys[ext.name] = 1;
-  }
-  keys.externalUserId = 1;
-
-  schema.index(keys, {
-    unique: true,
-    partialFilterExpression: { externalUserId: { $exists: true } },
+  applyScopedUniqueIndex(schema, entityName, extensions, 'externalUserId', {
     name: 'externalUserId_scoped_unique',
+    partial: true,
   });
 }

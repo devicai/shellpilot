@@ -3,7 +3,11 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { loadConfig } from './config/config.loader';
 import { ConfigModule } from './config/config.module';
-import { applyExtensions, applyExternalIdentityIndex } from './providers/extensions.provider';
+import {
+  applyExtensions,
+  applyExternalIdentityIndex,
+  applyScopedUniqueIndex,
+} from './providers/extensions.provider';
 import { ExtensionScopeInterceptor } from './interceptors/extension-scope.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { HealthModule } from './health/health.module';
@@ -40,6 +44,15 @@ applyExtensions(RuleSchema, 'Rule', config.extensions.properties);
 applyExtensions(VaultEntrySchema, 'VaultEntry', config.extensions.properties);
 applyExtensions(TraceSchema, 'Trace', config.extensions.properties);
 applyExtensions(ProfileSchema, 'Profile', config.extensions.properties);
+
+// Tenant-scoped uniqueness (unique per clientUID, not globally). Applied AFTER
+// applyExtensions so the scope fields already exist on the schema.
+applyScopedUniqueIndex(CliSchema, 'Cli', config.extensions.properties, 'slug', {
+  name: 'slug_scoped_unique',
+});
+applyScopedUniqueIndex(ProfileSchema, 'Profile', config.extensions.properties, 'name', {
+  name: 'name_scoped_unique',
+});
 
 @Module({
   imports: [
