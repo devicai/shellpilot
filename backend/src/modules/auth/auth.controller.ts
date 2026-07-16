@@ -107,8 +107,9 @@ export class AuthController {
   ) {
     // Accepts a JWT admin or a trusted caller acting as an admin (act-as scope):
     // either way RolesGuard has asserted the principal is an admin and the guard
-    // attached it to `req.user`, so `user.id` is the authorising admin's id.
-    return this.cliAuth.generateEnrollment(dto.userId, user.id, scope);
+    // attached it to `req.user`. Pass the vetted principal (id + role) down — a
+    // delegated admin's role exists only on the request, not on the local mirror.
+    return this.cliAuth.generateEnrollment(dto.userId, { id: user.id, role: user.role }, scope);
   }
 
   @ApiSecurity('x-api-key')

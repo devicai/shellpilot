@@ -81,6 +81,54 @@ describe('CliAuthService.provisionServiceAccount', () => {
   });
 });
 
+describe('CliAuthService.generateEnrollment', () => {
+  function makeEnrollUsers() {
+    const target = { _id: new Types.ObjectId(), email: 'emp@acme.com', name: 'Emp', role: 'viewer' };
+    return { target, findById: jest.fn(async () => target) };
+  }
+
+  function makeRedis() {
+    return { setex: jest.fn(async () => 'OK'), get: jest.fn(), del: jest.fn() };
+  }
+
+  it('honours the guard-verified admin role without re-checking the DB', async () => {
+    // A trusted BFF (act-as) asserts the acting admin by header; the local
+    // mirror may still hold the default role. The guard already vetted the
+    // caller — a DB re-check here would 403 a valid delegated admin.
+    const users = makeEnrollUsers();
+    const redis = makeRedis();
+    const service = new CliAuthService(redis as never, makeApiKeys() as never, users as never);
+    const scope = { clientUID: 'acme' };
+    const targetId = String(users.target._id);
+
+    const result = await service.generateEnrollment(
+      targetId,
+      { id: 'delegated-admin-id', role: 'admin' },
+      scope,
+    );
+
+    // Only the target user is resolved (tenant-scoped); the caller is never looked up.
+    expect(users.findById).toHaveBeenCalledTimes(1);
+    expect(users.findById).toHaveBeenCalledWith(targetId, scope);
+    expect(redis.setex).toHaveBeenCalledWith(expect.stringContaining(result.enrollToken), 24 * 60 * 60, targetId);
+    expect(result.userEmail).toBe('emp@acme.com');
+    expect(result.enrollToken).toBeTruthy();
+  });
+
+  it('falls back to the DB admin check when the principal carries no role', async () => {
+    const users = makeEnrollUsers(); // mirror role: viewer
+    const redis = makeRedis();
+    const service = new CliAuthService(redis as never, makeApiKeys() as never, users as never);
+
+    await expect(
+      service.generateEnrollment(String(users.target._id), { id: 'caller-id' }, {}),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    // The fallback resolves the caller globally (empty scope), like every requireAdmin.
+    expect(users.findById).toHaveBeenCalledWith('caller-id', {});
+    expect(redis.setex).not.toHaveBeenCalled();
+  });
+});
+
 describe('CliAuthService.mintSelf', () => {
   function makeSelfUsers() {
     const me = { _id: new Types.ObjectId(), email: 'me@example.com', name: 'Me', role: 'viewer' };
