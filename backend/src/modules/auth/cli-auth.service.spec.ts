@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { CliAuthService } from './cli-auth.service';
 
@@ -126,6 +126,77 @@ describe('CliAuthService.generateEnrollment', () => {
     // The fallback resolves the caller globally (empty scope), like every requireAdmin.
     expect(users.findById).toHaveBeenCalledWith('caller-id', {});
     expect(redis.setex).not.toHaveBeenCalled();
+  });
+});
+
+describe('CliAuthService.redeemEnrollment', () => {
+  const ENROLL_PREFIX = 'shellpilot:enroll:';
+  const ENROLL_USED_PREFIX = 'shellpilot:enroll:used:';
+
+  function makeRedeemUsers() {
+    const target = { _id: new Types.ObjectId(), email: 'emp@acme.com', name: 'Emp', role: 'viewer' };
+    return {
+      target,
+      // First call resolves the admin caller, later calls resolve the target user.
+      findById: jest.fn(async (id: string) => (id === 'admin-id' ? { role: 'admin' } : target)),
+    };
+  }
+
+  /** In-memory Redis with the atomic getDel + setex/get the service relies on. */
+  function makeRedis(seed: Record<string, string> = {}) {
+    const store = new Map<string, string>(Object.entries(seed));
+    return {
+      store,
+      getDel: jest.fn(async (k: string) => {
+        const v = store.get(k) ?? null;
+        store.delete(k);
+        return v;
+      }),
+      get: jest.fn(async (k: string) => store.get(k) ?? null),
+      setex: jest.fn(async (k: string, _ttl: number, v: string) => {
+        store.set(k, v);
+        return 'OK';
+      }),
+      del: jest.fn(async (k: string) => (store.delete(k) ? 1 : 0)),
+    };
+  }
+
+  it('consumes the token, mints a key, and leaves a used-tombstone', async () => {
+    const users = makeRedeemUsers();
+    const targetId = String(users.target._id);
+    const redis = makeRedis({ [ENROLL_PREFIX + 'tok123']: targetId });
+    const apiKeys = makeApiKeys();
+    const service = new CliAuthService(redis as never, apiKeys as never, users as never);
+
+    const result = await service.redeemEnrollment('tok123', 'admin-id', { clientUID: 'acme' });
+
+    expect(redis.getDel).toHaveBeenCalledWith(ENROLL_PREFIX + 'tok123');
+    expect(redis.setex).toHaveBeenCalledWith(ENROLL_USED_PREFIX + 'tok123', 24 * 60 * 60, targetId);
+    expect(redis.store.has(ENROLL_PREFIX + 'tok123')).toBe(false); // consumed
+    expect(result.apiKey).toBe('shp_minted.secret');
+    expect(result.user.email).toBe('emp@acme.com');
+  });
+
+  it('reports an already-used token distinctly when redeemed twice', async () => {
+    const users = makeRedeemUsers();
+    const targetId = String(users.target._id);
+    const redis = makeRedis({ [ENROLL_PREFIX + 'tok123']: targetId });
+    const service = new CliAuthService(redis as never, makeApiKeys() as never, users as never);
+
+    await service.redeemEnrollment('tok123', 'admin-id', {}); // first: OK
+    await expect(service.redeemEnrollment('tok123', 'admin-id', {})).rejects.toMatchObject({
+      message: expect.stringContaining('already been used'),
+    });
+  });
+
+  it('reports expired/invalid for a token with no tombstone', async () => {
+    const users = makeRedeemUsers();
+    const redis = makeRedis(); // empty store
+    const service = new CliAuthService(redis as never, makeApiKeys() as never, users as never);
+
+    const err = await service.redeemEnrollment('ghost', 'admin-id', {}).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.message).toContain('Invalid or expired');
   });
 });
 
