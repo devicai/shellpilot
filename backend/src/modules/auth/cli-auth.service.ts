@@ -7,6 +7,9 @@ import { UsersService } from '../users/users.service';
 import { ExtensionScope } from '../../interfaces';
 
 const ENROLL_PREFIX = 'shellpilot:enroll:';
+// Tombstone left behind after a token is redeemed, so a repeated redeem can be
+// told apart from a never-existed / expired token (both are a plain GET miss).
+const ENROLL_USED_PREFIX = 'shellpilot:enroll:used:';
 const ENROLL_TTL_SECONDS = 24 * 60 * 60; // 24h
 
 export interface PublicUser {
@@ -137,9 +140,28 @@ export class CliAuthService {
   ): Promise<MintedCredential> {
     await this.requireAdmin(callerUserId, scope);
     const key = ENROLL_PREFIX + token;
-    const userId = await this.redis.get(key);
-    if (!userId) throw new BadRequestException('Invalid or expired enrollment token');
-    await this.redis.del(key); // single-use
+    // Consume atomically so two concurrent redeems can't both succeed.
+    const userId = await this.redis.getDel(key);
+    if (!userId) {
+      // A GET miss is ambiguous: the token may have been redeemed already, or it
+      // may have expired / never existed. The tombstone disambiguates so the
+      // wrapper can tell the user their credentials file is spent, not broken.
+      const used = await this.redis.get(ENROLL_USED_PREFIX + token);
+      if (used) {
+        throw new BadRequestException(
+          'This enrollment token has already been used. Enrollment tokens are single-use: ' +
+            'the credentials file was already redeemed for an API key. Generate a new credentials ' +
+            'file from Devic and enroll again.',
+        );
+      }
+      throw new BadRequestException(
+        'Invalid or expired enrollment token. Enrollment tokens expire 24h after being issued. ' +
+          'Generate a new credentials file from Devic and enroll again.',
+      );
+    }
+    // Leave a tombstone for the token's remaining lifetime so a repeated redeem
+    // reports "already used" instead of the ambiguous expired/invalid message.
+    await this.redis.setex(ENROLL_USED_PREFIX + token, ENROLL_TTL_SECONDS, userId);
     const user = await this.users.findById(userId, scope);
     const issued = await this.apiKeys.mintForUser(userId, `cli-enroll-${this.today()}`, [], undefined, scope);
     return { apiKey: issued.token, user: this.publicUser(user) };
