@@ -110,10 +110,15 @@ export class CliAuthService {
   /** Case 3a — admin generates a single-use enrollment token for a user. */
   async generateEnrollment(
     userId: string,
-    callerUserId: string,
+    caller: { id: string; role?: string },
     scope: ExtensionScope = {},
   ): Promise<{ enrollToken: string; expiresAt: string; userEmail: string }> {
-    await this.requireAdmin(callerUserId, scope);
+    // The endpoint's RolesGuard already vetted the request principal's role.
+    // For a delegated caller (trusted BFF, act-as scope) that role lives only
+    // on the request — the local mirror keeps its own default — so honour the
+    // guard-verified role here and fall back to the DB check only when the
+    // principal carries no role.
+    if (caller.role !== 'admin') await this.requireAdmin(caller.id, scope);
     const user = await this.users.findById(userId, scope); // throws if not found / cross-tenant
     const token = randomBytes(24).toString('base64url');
     await this.redis.setex(ENROLL_PREFIX + token, ENROLL_TTL_SECONDS, userId);
