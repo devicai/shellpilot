@@ -49,7 +49,13 @@ export class PolicyYamlService {
       throw new NotFoundException('Policy not found');
     }
     const rules = await this.rules.findByPolicy(policyId, scope);
-    const clis = await this.loadCliCatalog(policy.clis ?? [], scope);
+    // Compile catalog entries for the policy's declared CLIs plus any CLI a
+    // rule references. Auto-generated policies (e.g. "Individual rules — …")
+    // carry an empty `clis` array, so without the union the wrapper would get
+    // rules for a CLI but no install/auth block for it.
+    const slugs = new Set<string>(policy.clis ?? []);
+    for (const r of rules) if (r.cli) slugs.add(r.cli);
+    const clis = await this.loadCliCatalog([...slugs], scope);
 
     const doc = {
       default_effect: policy.defaultEffect,
