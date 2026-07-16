@@ -78,7 +78,7 @@ describe('CredentialsService.issue — server-side policy enforcement', () => {
     const { svc, jit, traces } = makeService({ decision: 'deny', enforcement: 'enforce' });
     const err = await svc.issue(dto as never, {}).catch((e) => e);
     expect(err).toBeInstanceOf(ForbiddenException);
-    expect((err.getResponse() as { code: string }).code).toBe('policy-deny');
+    expect((err.getResponse() as { details: { code: string } }).details.code).toBe('policy-deny');
     // The real secret is never released.
     expect(jit.issue).not.toHaveBeenCalled();
     // The denied attempt is audited as a deny trace.

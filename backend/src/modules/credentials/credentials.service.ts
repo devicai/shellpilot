@@ -227,13 +227,15 @@ export class CredentialsService {
       // lets the wrapper treat this as a hard block instead of a missing
       // credential (which would fall through to the user's local secrets).
       if (evaluation.enforcement === 'enforce') {
+        // The marker rides in `details` because the global HttpExceptionFilter
+        // only forwards message / error / details — a top-level `code` would be
+        // dropped. The wrapper keys off details.code to hard-block.
         throw new ForbiddenException({
-          statusCode: 403,
           error: 'Forbidden',
-          code: 'policy-deny',
           message: `Command denied by policy${
             evaluation.matchedRule?.reason ? `: ${evaluation.matchedRule.reason}` : ''
           }`,
+          details: { code: 'policy-deny' },
         });
       }
     }
