@@ -1,10 +1,10 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { Types } from 'mongoose';
 import { CONFIG } from '../../config/config.loader';
 import { ExtensionProperty, ShellpilotModuleConfig } from '../../config/config.types';
-import { AuthenticatedUser, ExtensionScope, PaginatedResponse } from '../../interfaces';
+import { AuthenticatedApiKey, AuthenticatedUser, ExtensionScope, PaginatedResponse } from '../../interfaces';
 import { EXTENSIONS_TOKEN } from '../../providers/extensions.provider';
 import { deriveAuthScope } from '../../common/scope/derive-auth-scope';
 import { ApiKeysRepository } from './api-keys.repository';
@@ -41,6 +41,26 @@ export class ApiKeysService {
     const secret = randomBytes(SECRET_LENGTH).toString('base64url');
     const token = `${this.config.auth.apiKeyPrefix}${prefix}.${secret}`;
     return { prefix, secret, token };
+  }
+
+  /**
+   * Resolve the acting principal for a request that may carry a JWT user, a
+   * delegated (act-as) user, or a bare API key. For a bare key the actor is the
+   * key's owner, with the role read from the user record. Identity resolution
+   * is deliberately global (`{}` scope) — the key already pins the tenant for
+   * every data operation via the request scope.
+   */
+  async resolveActor(user?: AuthenticatedUser, apiKey?: AuthenticatedApiKey): Promise<AuthenticatedUser> {
+    if (user) return user;
+    if (!apiKey) throw new UnauthorizedException();
+    const owner = await this.users.findById(apiKey.userId, {});
+    return {
+      id: apiKey.userId,
+      email: owner.email,
+      role: owner.role,
+      name: owner.name,
+      scope: apiKey.scope,
+    };
   }
 
   parseToken(rawToken: string): { prefix: string; secret: string } | null {
