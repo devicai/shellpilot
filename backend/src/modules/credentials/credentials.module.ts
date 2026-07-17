@@ -10,6 +10,7 @@ import { ClisModule } from '../clis-catalog/clis.module';
 import { PostProcessService } from './post-process/post-process.service';
 import { TracesModule } from '../traces/traces.module';
 import { ProfilesModule } from '../profiles/profiles.module';
+import { RulesModule } from '../rules/rules.module';
 
 @Module({
   imports: [
@@ -17,6 +18,9 @@ import { ProfilesModule } from '../profiles/profiles.module';
     ClisModule,
     TracesModule,
     ProfilesModule,
+    // Exposes PolicyEvaluatorService so issuance can re-evaluate the command's
+    // rule server-side (RulesModule does not import CredentialsModule — no cycle).
+    RulesModule,
   ],
   controllers: [CredentialsController],
   providers: [

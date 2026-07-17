@@ -19,6 +19,7 @@ import { PostProcessService } from './post-process/post-process.service';
 import { TracesService } from '../traces/traces.service';
 import { UsersRepository } from '../users/users.repository';
 import { ProfilesRepository } from '../profiles/profiles.repository';
+import { PolicyEvaluatorService } from '../rules/evaluator/policy-evaluator.service';
 import { AuthenticatedUser, ExtensionScope, PaginatedResponse } from '../../interfaces';
 
 export interface JitVerifyResponse {
@@ -52,6 +53,7 @@ export class CredentialsService {
     private readonly traces: TracesService,
     private readonly users: UsersRepository,
     private readonly profiles: ProfilesRepository,
+    private readonly evaluator: PolicyEvaluatorService,
   ) {}
 
   async store(
@@ -202,6 +204,42 @@ export class CredentialsService {
       }
     }
 
+    // Server-side policy re-evaluation. The wrapper decides allow/deny locally
+    // against a rules cache that lives on the user's machine and can be forged.
+    // Re-checking the rule HERE — at the point the real secret would be
+    // released — makes the local decision non-authoritative: a tampered local
+    // policy can flip the wrapper's view, but it can never obtain a credential
+    // the org's policy denies. `commandPath` maps directly onto the evaluator's
+    // `args` (both already exclude the leading cli segment).
+    const evaluation = await this.evaluator.evaluate(
+      dto.cli,
+      dto.commandPath ?? [],
+      { userId },
+      scope,
+    );
+    if (evaluation.decision !== 'allow') {
+      // Audit the denied attempt regardless of enforcement mode, so operators
+      // see forged-policy escalation attempts even under monitor policies.
+      await this.traceDeny(dto, userId, evaluation, scope);
+      // Only enforcing policies block issuance. Monitor modes (warn / audit)
+      // observe but let the command proceed, matching the evaluator's own
+      // contract (see PolicyEvaluatorService). The distinct `policy-deny` code
+      // lets the wrapper treat this as a hard block instead of a missing
+      // credential (which would fall through to the user's local secrets).
+      if (evaluation.enforcement === 'enforce') {
+        // The marker rides in `details` because the global HttpExceptionFilter
+        // only forwards message / error / details — a top-level `code` would be
+        // dropped. The wrapper keys off details.code to hard-block.
+        throw new ForbiddenException({
+          error: 'Forbidden',
+          message: `Command denied by policy${
+            evaluation.matchedRule?.reason ? `: ${evaluation.matchedRule.reason}` : ''
+          }`,
+          details: { code: 'policy-deny' },
+        });
+      }
+    }
+
     const entry = await this.repo.findForUserAndCli(userId, dto.cli, scope);
     if (!entry) {
       throw new NotFoundException(
@@ -261,6 +299,40 @@ export class CredentialsService {
     }
 
     return issued;
+  }
+
+  /**
+   * Emit a `deny` trace for an issuance blocked (or observed, under monitor) by
+   * server-side policy re-evaluation. Best-effort: a trace hiccup must not turn
+   * a policy decision into a 500. Uses the `deny` decision (the trace enum has
+   * no dedicated `policy-deny`) plus the enforcement mode and matched rule so
+   * operators can tell an enforced block from a monitored observation.
+   */
+  private async traceDeny(
+    dto: IssueCredentialDto,
+    userId: string,
+    evaluation: Awaited<ReturnType<PolicyEvaluatorService['evaluate']>>,
+    scope: ExtensionScope,
+  ): Promise<void> {
+    try {
+      await this.traces.ingest(
+        {
+          cli: dto.cli,
+          commandPath: dto.commandPath ?? [],
+          decision: 'deny',
+          enforcement: evaluation.enforcement,
+          matchedRulePath: evaluation.matchedRule?.path,
+          reason: evaluation.matchedRule?.reason,
+          userId,
+          agent: 'shellpilot-backend',
+        },
+        scope,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to emit policy-deny trace for user=${userId} cli=${dto.cli}: ${(err as Error).message}`,
+      );
+    }
   }
 
   async verify(dto: VerifyCredentialDto, scope: ExtensionScope): Promise<JitVerifyResponse> {
